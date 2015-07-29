@@ -43,6 +43,9 @@ public:
   void setSaturation(GLfloat);
   void setGamma(GLfloat);
 
+  void setNearThreshold(int);
+  void setFarThreshold(int);
+
 protected:
   void initializeGL(void);
   void resizeGL(int w, int h);

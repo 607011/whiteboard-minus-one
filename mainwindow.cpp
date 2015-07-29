@@ -99,6 +99,11 @@ MainWindow::MainWindow(QWidget *parent)
   QObject::connect(ui->gammaDoubleSpinBox, SIGNAL(valueChanged(double)), SLOT(gammaChanged(double)));
   QObject::connect(ui->contrastDoubleSpinBox, SIGNAL(valueChanged(double)), SLOT(contrastChanged(double)));
   QObject::connect(ui->saturationDoubleSpinBox, SIGNAL(valueChanged(double)), SLOT(saturationChanged(double)));
+  QObject::connect(ui->actionMapFromColorToDepth, SIGNAL(toggled(bool)), d->rgbdWidget, SLOT(setMapFromColorToDepth(bool)));
+  QObject::connect(ui->farVerticalSlider, SIGNAL(valueChanged(int)), SLOT(farThresholdChanged(int)));
+  QObject::connect(ui->nearVerticalSlider, SIGNAL(valueChanged(int)), SLOT(nearThresholdChanged(int)));
+
+  ui->actionMapFromColorToDepth->setChecked(true);
 
   d->timer.start();
   startTimer(1000 / 25, Qt::PreciseTimer);
@@ -249,4 +254,28 @@ void MainWindow::saturationChanged(double saturation)
 {
   Q_D(MainWindow);
   d->threeDWidget->setSaturation((GLfloat)saturation);
+}
+
+
+void MainWindow::nearThresholdChanged(int value)
+{
+  Q_D(MainWindow);
+  if (value < ui->farVerticalSlider->value()) {
+    d->rgbdWidget->setNearThreshold(value);
+  }
+  else {
+    ui->farVerticalSlider->setValue(value);
+  }
+}
+
+
+void MainWindow::farThresholdChanged(int value)
+{
+  Q_D(MainWindow);
+  if (value > ui->nearVerticalSlider->value()) {
+    d->rgbdWidget->setFarThreshold(value);
+  }
+  else {
+    ui->nearVerticalSlider->setValue(value);
+  }
 }

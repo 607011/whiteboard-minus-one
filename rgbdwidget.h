@@ -36,14 +36,17 @@ public:
   explicit RGBDWidget(QWidget *parent = nullptr);
   void setDepthData(INT64 nTime, const UINT16* pBuffer, int nWidth, int nHeight, int nMinDepth, int nMaxDepth);
   void setColorData(INT64 nTime, const uchar *pBuffer, int nWidth, int nHeight);
+  void setNearThreshold(int);
+  void setFarThreshold(int);
+
+public slots:
+  void setMapFromColorToDepth(bool depthToColorFrameMappingEnabled);
 
 signals:
 
 protected:
   void resizeEvent(QResizeEvent*);
   void paintEvent(QPaintEvent*);
-
-public slots:
 
 private:
   QScopedPointer<RGBDWidgetPrivate> d_ptr;

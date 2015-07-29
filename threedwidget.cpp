@@ -38,6 +38,13 @@ static const QVector3D Vertices[4] = {
   QVector3D( 1.6f, -1.2f, 0.f),
   QVector3D( 1.6f,  1.2f, 0.f)
 };
+static const QVector2D TexCoords4FBO[4] =
+{
+    QVector2D(1, 1),
+    QVector2D(1, 0),
+    QVector2D(0, 1),
+    QVector2D(0, 0)
+};
 static const QVector2D TexCoords[4] = {
   QVector2D(0, 0),
   QVector2D(0, 1),
@@ -78,6 +85,7 @@ public:
     , nearThreshold(0)
     , farThreshold(0xffff)
     , timestamp(0)
+    , firstPaintEventPending(true)
   {
     // ...
   }
@@ -85,6 +93,10 @@ public:
   {
     SafeDelete(mixShaderProgram);
     SafeDelete(imageFBO);
+  }
+
+  bool shaderProgramIsValid(void) const {
+    return mixShaderProgram != nullptr && mixShaderProgram->isLinked();
   }
 
   GLfloat xRot;
@@ -95,9 +107,9 @@ public:
   QMatrix4x4 mvMatrix;
 
   GLuint videoTextureHandle;
-  GLint uVideoTexture;
+  GLint uLocVideoTexture;
   GLuint depthTextureHandle;
-  GLint uDepthTexture;
+  GLint uLocDepthTexture;
 
   QImage depthImage;
 //  GLuint imageTextureHandle;
@@ -117,14 +129,20 @@ public:
   INT64 timestamp;
 
   GLenum GLerror;
+
+  bool firstPaintEventPending;
 };
 
 
 ThreeDWidget::ThreeDWidget(QWidget *parent)
-  : QGLWidget(parent)
+  : QGLWidget(QGLFormat(QGL::SingleBuffer | QGL::NoDepthBuffer | QGL::AlphaChannel
+                        | QGL::NoAccumBuffer | QGL::NoStencilBuffer | QGL::NoStereoBuffers
+                        | QGL::HasOverlay | QGL::NoSampleBuffers), parent)
   , d_ptr(new ThreeDWidgetPrivate)
 {
+  setFocusPolicy(Qt::StrongFocus);
   setFocus(Qt::OtherFocusReason);
+  setMouseTracking(true);
   setCursor(Qt::OpenHandCursor);
   setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding);
   setMaximumSize(ColorWidth, ColorHeight);
@@ -154,14 +172,11 @@ void ThreeDWidget::makeShader(void)
   d->mixShaderProgram->link();
   d->mixShaderProgram->bind();
 
-  d->uVideoTexture = glGetUniformLocation(d->mixShaderProgram->programId(), "uVideoTexture");
-  glUniform1i(d->uVideoTexture, 0);
+  d->uLocVideoTexture = d->mixShaderProgram->uniformLocation("uVideoTexture");
+  d->mixShaderProgram->setUniformValue(d->uLocVideoTexture, 0);
 
-  d->uDepthTexture = glGetUniformLocation(d->mixShaderProgram->programId(), "uDepthTexture");
-  glUniform1i(d->uDepthTexture, 1);
-
-  // d->uImageTexture = glGetUniformLocation(d->mixShaderProgram->programId(), "uImageTexture");
-  // glUniform1i(d->uImageTexture, 2);
+  d->uLocDepthTexture = d->mixShaderProgram->uniformLocation("uDepthTexture");
+  d->mixShaderProgram->setUniformValue(d->uLocDepthTexture, 1);
 
   setGamma(2.1f);
   setSaturation(1.f);
@@ -177,11 +192,6 @@ void ThreeDWidget::initializeGL(void)
 
   initializeOpenGLFunctions();
 
-  GLint GLMajorVer, GLMinorVer;
-  glGetIntegerv(GL_MAJOR_VERSION, &GLMajorVer);
-  glGetIntegerv(GL_MINOR_VERSION, &GLMinorVer);
-  qDebug() << QString("OpenGL %1.%2").arg(GLMajorVer).arg(GLMinorVer);
-
   glDisable(GL_TEXTURE_2D);
   glDisable(GL_DEPTH_TEST);
   glDisable(GL_CULL_FACE);
@@ -189,29 +199,25 @@ void ThreeDWidget::initializeGL(void)
   glEnableClientState(GL_VERTEX_ARRAY);
   glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 
-  glActiveTexture(GL_TEXTURE0);
+  glEnable(GL_ALPHA_TEST);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
   glGenTextures(1, &d->videoTextureHandle);
+  glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, d->videoTextureHandle);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
 
-  glActiveTexture(GL_TEXTURE1);
   glGenTextures(1, &d->depthTextureHandle);
+  glActiveTexture(GL_TEXTURE1);
   glBindTexture(GL_TEXTURE_2D, d->depthTextureHandle);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-
-//  glActiveTexture(GL_TEXTURE2);
-//  glGenTextures(1, &d->imageTextureHandle);
-//  glBindTexture(GL_TEXTURE_2D, d->imageTextureHandle);
-//  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-//  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-//  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-//  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
 
   d->imageFBO = new QGLFramebufferObject(ColorWidth, ColorHeight);
 
@@ -230,12 +236,22 @@ void ThreeDWidget::resizeGL(int width, int height)
 void ThreeDWidget::paintGL(void)
 {
   Q_D(ThreeDWidget);
+
+  if (d->firstPaintEventPending) {
+    d->firstPaintEventPending = false;
+    GLint GLMajorVer = 0, GLMinorVer = 0;
+    glGetIntegerv(GL_MAJOR_VERSION, &GLMajorVer);
+    glGetIntegerv(GL_MINOR_VERSION, &GLMinorVer);
+    qDebug() << QString("OpenGL %1.%2").arg(GLMajorVer).arg(GLMinorVer);
+  }
+
   glClearColor(.2f, .3f, .5f, .5f);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-  if (d->imageFBO == nullptr || d->mixShaderProgram == nullptr)
+  if (d->imageFBO == nullptr || d->mixShaderProgram == nullptr || d->timestamp == 0)
     return;
 
+  d->mixShaderProgram->setAttributeArray(PROGRAM_TEXCOORD_ATTRIBUTE, TexCoords);
   d->mixShaderProgram->setUniformValue("uMatrix", d->mvMatrix);
   d->mixShaderProgram->bind();
 
@@ -245,9 +261,12 @@ void ThreeDWidget::paintGL(void)
   d->imageFBO->bind();
   glViewport(0, 0, ColorWidth, ColorHeight);
   d->mixShaderProgram->setUniformValue("uMatrix", QMatrix4x4());
+  d->mixShaderProgram->setAttributeArray(PROGRAM_TEXCOORD_ATTRIBUTE, TexCoords4FBO);
   glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
   d->imageFBO->release();
-  // d->imageFBO->toImage().save(QString("%1.jpg").arg(d->timestamp, 16, 10, QChar('0')), "JPG", 50);
+
+  d->imageFBO->toImage().save(QString("images/%1.jpg").arg(d->timestamp, 16, 10, QChar('0')), "JPG", 50);
+
 }
 
 
@@ -311,6 +330,7 @@ void ThreeDWidget::setVideoData(INT64 nTime, const uchar *pBuffer, int nWidth, i
     return;
 
   d->timestamp = nTime;
+  makeCurrent();
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, d->videoTextureHandle);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_BGRA, nWidth, nHeight, 0, GL_BGRA, GL_UNSIGNED_BYTE, pBuffer);
@@ -328,8 +348,8 @@ void ThreeDWidget::setDepthData(INT64 nTime, const UINT16 *pBuffer, int nWidth, 
   if (nWidth != DepthWidth || nHeight != DepthHeight || pBuffer == nullptr)
     return;
 
-  glActiveTexture(GL_TEXTURE1);
-  glBindTexture(GL_TEXTURE_2D, d->depthTextureHandle);
+  makeCurrent();
+
 #if 1
   QRgb *dst = reinterpret_cast<QRgb*>(d->depthImage.bits());
   const UINT16 *src = pBuffer;
@@ -346,11 +366,20 @@ void ThreeDWidget::setDepthData(INT64 nTime, const UINT16 *pBuffer, int nWidth, 
     ++dst;
     ++src;
   }
+
+  glActiveTexture(GL_TEXTURE1);
+  glBindTexture(GL_TEXTURE_2D, d->depthTextureHandle);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, nWidth, nHeight, 0, GL_RGBA, GL_RGBA, dst);
 #else
   glTexImage2D(GL_TEXTURE_2D, 0, GL_R16UI, nWidth, nHeight, 0, GL_RED_INTEGER, GL_UNSIGNED_SHORT, pBuffer);
 #endif
+
+
+#if 0
   d->depthImage.save(QString("images/%1.jpg").arg(nTime, 14, 10, QChar('0')), "JPG", 50);
+#else
+#endif
+
 }
 
 
@@ -376,3 +405,25 @@ void ThreeDWidget::setGamma(GLfloat gamma)
   d->mixShaderProgram->setUniformValue("uGamma", gamma);
   updateGL();
 }
+
+
+void ThreeDWidget::setNearThreshold(int value)
+{
+  Q_D(ThreeDWidget);
+  d->nearThreshold = value;
+  if (d->mixShaderProgram != nullptr && d->mixShaderProgram->isLinked())
+    d->mixShaderProgram->setUniformValue("uFarThreshold", d->farThreshold);
+  updateGL();
+}
+
+
+void ThreeDWidget::setFarThreshold(int value)
+{
+  Q_D(ThreeDWidget);
+  d->farThreshold = value;
+  if (d->mixShaderProgram != nullptr && d->mixShaderProgram->isLinked())
+    d->mixShaderProgram->setUniformValue("uFarThreshold", d->farThreshold);
+  updateGL();
+}
+
+
