@@ -1,7 +1,7 @@
 // Copyright (c) 2015 Oliver Lau <ola@ct.de>
 // All rights reserved.
 
-#version 130
+#version 150 core
 #extension GL_EXT_gpu_shader4 : enable
 
 in vec4 aVertex;

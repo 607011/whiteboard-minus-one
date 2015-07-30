@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>948</width>
-    <height>745</height>
+    <width>1016</width>
+    <height>668</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -156,16 +156,24 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>948</width>
+     <width>1016</width>
      <height>21</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuExtras">
     <property name="title">
-     <string>Extras</string>
+     <string>Options</string>
     </property>
     <addaction name="actionMapFromColorToDepth"/>
+    <addaction name="actionMatchColorAndDepthSpace"/>
    </widget>
+   <widget class="QMenu" name="menuFile">
+    <property name="title">
+     <string>File</string>
+    </property>
+    <addaction name="actionExit"/>
+   </widget>
+   <addaction name="menuFile"/>
    <addaction name="menuExtras"/>
   </widget>
   <widget class="QToolBar" name="mainToolBar">
@@ -186,6 +194,22 @@
    </property>
    <property name="text">
     <string>Map from color to depth</string>
+   </property>
+  </action>
+  <action name="actionExit">
+   <property name="text">
+    <string>Exit</string>
+   </property>
+  </action>
+  <action name="actionMatchColorAndDepthSpace">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>false</bool>
+   </property>
+   <property name="text">
+    <string>Match color and depth space</string>
    </property>
   </action>
  </widget>

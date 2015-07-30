@@ -21,6 +21,7 @@
 
 #include <QDebug>
 #include <QElapsedTimer>
+#include <QBoxLayout>
 
 #include "globals.h"
 #include "util.h"
@@ -79,29 +80,33 @@ MainWindow::MainWindow(QWidget *parent)
   , d_ptr(new MainWindowPrivate(this))
 {
   Q_D(MainWindow);
-
-  qDebug() << "MainWindow::MainWindow()";
-
   ui->setupUi(this);
 
   initKinect();
 
   d->depthWidget = new DepthWidget;
-  ui->gridLayout->addWidget(d->depthWidget, 0, 0);
-
   d->rgbdWidget = new RGBDWidget;
-  ui->gridLayout->addWidget(d->rgbdWidget, 1, 0);
-
   d->videoWidget = new VideoWidget;
-  ui->gridLayout->addWidget(d->videoWidget, 0, 1);
-
   d->threeDWidget = new ThreeDWidget;
-  ui->gridLayout->addWidget(d->threeDWidget, 1, 1);
+
+
+  QBoxLayout *hbox = new QBoxLayout(QBoxLayout::LeftToRight);
+  hbox->addWidget(d->videoWidget);
+  hbox->addWidget(d->depthWidget);
+  hbox->addWidget(d->rgbdWidget);
+
+  QBoxLayout *vbox = new QBoxLayout(QBoxLayout::TopToBottom);
+  vbox->addLayout(hbox);
+  vbox->addWidget(d->threeDWidget);
+
+  ui->gridLayout->addLayout(vbox, 0, 0);
 
   QObject::connect(ui->gammaDoubleSpinBox, SIGNAL(valueChanged(double)), SLOT(gammaChanged(double)));
   QObject::connect(ui->contrastDoubleSpinBox, SIGNAL(valueChanged(double)), SLOT(contrastChanged(double)));
   QObject::connect(ui->saturationDoubleSpinBox, SIGNAL(valueChanged(double)), SLOT(saturationChanged(double)));
   QObject::connect(ui->actionMapFromColorToDepth, SIGNAL(toggled(bool)), d->rgbdWidget, SLOT(setMapFromColorToDepth(bool)));
+  QObject::connect(ui->actionMatchColorAndDepthSpace, SIGNAL(toggled(bool)), d->threeDWidget, SLOT(setMatchColorAndDepthSpace(bool)));
+  QObject::connect(ui->actionExit, SIGNAL(triggered(bool)),SLOT(close()));
   QObject::connect(ui->farVerticalSlider, SIGNAL(valueChanged(int)), SLOT(setFarThreshold(int)));
   QObject::connect(ui->nearVerticalSlider, SIGNAL(valueChanged(int)), SLOT(setNearThreshold(int)));
 
@@ -120,6 +125,7 @@ void MainWindow::initAfterGL(void)
   Q_D(MainWindow);
   qDebug() << "MainWindow::initAfterGL()";
   ui->actionMapFromColorToDepth->setChecked(true);
+  ui->actionMatchColorAndDepthSpace->setChecked(true);
   ui->nearVerticalSlider->setValue(1100);
   ui->farVerticalSlider->setValue(2400);
   ui->saturationDoubleSpinBox->setValue(1.0);
@@ -133,26 +139,28 @@ void MainWindow::initAfterGL(void)
 void MainWindow::timerEvent(QTimerEvent*)
 {
   Q_D(MainWindow);
+  bool depthReady = false;
+  bool rgbReady = false;
+  INT64 nTime = 0;
+  UINT16 *pDepthBuffer = nullptr;
+  IDepthFrame* pDepthFrame = nullptr;
+  USHORT nDepthMinReliableDistance = 0;
+  USHORT nDepthMaxDistance = 0;
 
   if (d->depthFrameReader) {
-    IDepthFrame* pDepthFrame = nullptr;
     HRESULT hr = d->depthFrameReader->AcquireLatestFrame(&pDepthFrame);
     if (SUCCEEDED(hr)) {
-      INT64 nTime = 0;
-      IFrameDescription *pFrameDescription = nullptr;
+      IFrameDescription *pDepthFrameDescription = nullptr;
       int nWidth = 0;
       int nHeight = 0;
-      USHORT nDepthMinReliableDistance = 0;
-      USHORT nDepthMaxDistance = 0;
       UINT nBufferSize = 0;
-      UINT16 *pBuffer = nullptr;
       hr = pDepthFrame->get_RelativeTime(&nTime);
       if (SUCCEEDED(hr))
-        hr = pDepthFrame->get_FrameDescription(&pFrameDescription);
+        hr = pDepthFrame->get_FrameDescription(&pDepthFrameDescription);
       if (SUCCEEDED(hr))
-        hr = pFrameDescription->get_Width(&nWidth);
+        hr = pDepthFrameDescription->get_Width(&nWidth);
       if (SUCCEEDED(hr))
-        hr = pFrameDescription->get_Height(&nHeight);
+        hr = pDepthFrameDescription->get_Height(&nHeight);
       if (SUCCEEDED(hr))
         hr = pDepthFrame->get_DepthMinReliableDistance(&nDepthMinReliableDistance);
       if (SUCCEEDED(hr)) {
@@ -160,34 +168,32 @@ void MainWindow::timerEvent(QTimerEvent*)
         hr = pDepthFrame->get_DepthMaxReliableDistance(&nDepthMaxDistance);
       }
       if (SUCCEEDED(hr))
-        hr = pDepthFrame->AccessUnderlyingBuffer(&nBufferSize, &pBuffer);
+        hr = pDepthFrame->AccessUnderlyingBuffer(&nBufferSize, &pDepthBuffer);
       if (SUCCEEDED(hr)) {
-        d->depthWidget->setDepthData(nTime, pBuffer, nWidth, nHeight, nDepthMinReliableDistance, nDepthMaxDistance);
-        d->rgbdWidget->setDepthData(nTime, pBuffer, nWidth, nHeight, nDepthMinReliableDistance, nDepthMaxDistance);
-        d->threeDWidget->setDepthData(nTime, pBuffer, nWidth, nHeight, nDepthMinReliableDistance, nDepthMaxDistance);
+        d->depthWidget->setDepthData(nTime, pDepthBuffer, nWidth, nHeight, nDepthMinReliableDistance, nDepthMaxDistance);
+        d->rgbdWidget->setDepthData(nTime, pDepthBuffer, nWidth, nHeight, nDepthMinReliableDistance, nDepthMaxDistance);
+        depthReady = true;
       }
-      SafeRelease(pFrameDescription);
+      SafeRelease(pDepthFrameDescription);
     }
-    SafeRelease(pDepthFrame);
   }
 
+  IColorFrame* pColorFrame = nullptr;
   if (d->colorFrameReader) {
-    IColorFrame* pColorFrame = nullptr;
     HRESULT hr = d->colorFrameReader->AcquireLatestFrame(&pColorFrame);
     if (SUCCEEDED(hr)) {
-      IFrameDescription *pFrameDescription = nullptr;
+      IFrameDescription *pRGBFrameDescription = nullptr;
       int nWidth = 0;
       int nHeight = 0;
       ColorImageFormat imageFormat = ColorImageFormat_None;
       UINT nBufferSize = 0;
-      INT64 nTime = 0;
       hr = pColorFrame->get_RelativeTime(&nTime);
       if (SUCCEEDED(hr))
-        hr = pColorFrame->get_FrameDescription(&pFrameDescription);
+        hr = pColorFrame->get_FrameDescription(&pRGBFrameDescription);
       if (SUCCEEDED(hr))
-        hr = pFrameDescription->get_Width(&nWidth);
+        hr = pRGBFrameDescription->get_Width(&nWidth);
       if (SUCCEEDED(hr))
-        hr = pFrameDescription->get_Height(&nHeight);
+        hr = pRGBFrameDescription->get_Height(&nHeight);
       if (SUCCEEDED(hr))
         hr = pColorFrame->get_RawColorImageFormat(&imageFormat);
       if (SUCCEEDED(hr)) {
@@ -195,7 +201,7 @@ void MainWindow::timerEvent(QTimerEvent*)
           hr = pColorFrame->AccessRawUnderlyingBuffer(&nBufferSize, reinterpret_cast<BYTE**>(&d->colorBuffer));
         }
         else if (d->colorBuffer != nullptr) {
-          nBufferSize = ColorWidth * ColorHeight * sizeof(RGBQUAD);
+          nBufferSize = ColorSize * sizeof(RGBQUAD);
           hr = pColorFrame->CopyConvertedFrameDataToArray(nBufferSize, reinterpret_cast<BYTE*>(d->colorBuffer), ColorImageFormat_Bgra);
         }
         else {
@@ -203,14 +209,20 @@ void MainWindow::timerEvent(QTimerEvent*)
         }
       }
       if (SUCCEEDED(hr)) {
-        d->videoWidget->setVideoData(nTime, reinterpret_cast<const BYTE*>(d->colorBuffer), nWidth, nHeight);
-        d->rgbdWidget->setColorData(nTime, reinterpret_cast<const BYTE*>(d->colorBuffer), nWidth, nHeight);
-        d->threeDWidget->setVideoData(nTime, reinterpret_cast<const BYTE*>(d->colorBuffer), nWidth, nHeight);
+        d->videoWidget->setVideoData(nTime, reinterpret_cast<const uchar*>(d->colorBuffer), nWidth, nHeight);
+        d->rgbdWidget->setColorData(nTime, reinterpret_cast<const uchar*>(d->colorBuffer), nWidth, nHeight);
+        rgbReady = true;
       }
-      SafeRelease(pFrameDescription);
+      SafeRelease(pRGBFrameDescription);
     }
-    SafeRelease(pColorFrame);
   }
+
+  if (rgbReady && depthReady) {
+    d->threeDWidget->process(nTime, reinterpret_cast<const uchar*>(d->colorBuffer), pDepthBuffer, nDepthMinReliableDistance, nDepthMaxDistance);
+  }
+
+  SafeRelease(pDepthFrame);
+  SafeRelease(pColorFrame);
 }
 
 

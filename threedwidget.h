@@ -40,11 +40,10 @@ public:
   explicit ThreeDWidget(QWidget *parent = nullptr);
    ~ThreeDWidget();
 
-  virtual QSize minimumSizeHint(void) const { return QSize(ColorWidth / 4, ColorHeight / 4); }
+  virtual QSize minimumSizeHint(void) const { return QSize(ColorWidth / 2, ColorHeight / 2); }
   virtual QSize sizeHint(void) const { return QSize(ColorWidth, ColorHeight); }
 
-  void setVideoData(INT64 nTime, const uchar *pBuffer, int nWidth, int nHeight);
-  void setDepthData(INT64 nTime, const UINT16 *pBuffer, int nWidth, int nHeight, int nMinDepth, int nMaxDepth);
+  void process(INT64 nTime, const uchar *pRGB, const UINT16 *pDepth, int minReliableDist, int maxDist);
 
   void setContrast(GLfloat);
   void setSaturation(GLfloat);
@@ -52,6 +51,9 @@ public:
 
   void setNearThreshold(GLuint);
   void setFarThreshold(GLuint);
+
+public slots:
+  void setMatchColorAndDepthSpace(bool);
 
 signals:
   void ready(void);

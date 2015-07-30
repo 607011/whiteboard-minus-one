@@ -50,7 +50,7 @@ VideoWidget::VideoWidget(QWidget *parent)
   , d_ptr(new VideoWidgetPrivate)
 {
   setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding);
-  setMaximumSize(ColorWidth, ColorHeight);
+  setMaximumSize(ColorWidth / 2, ColorHeight / 2);
   setMinimumSize(ColorWidth / 8, ColorHeight / 8);
 }
 
