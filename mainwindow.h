@@ -48,8 +48,9 @@ private slots:
   void contrastChanged(double);
   void gammaChanged(double);
   void saturationChanged(double);
-  void nearThresholdChanged(int);
-  void farThresholdChanged(int);
+  void setNearThreshold(int);
+  void setFarThreshold(int);
+  void initAfterGL(void);
 
 private:
   Ui::MainWindow *ui;

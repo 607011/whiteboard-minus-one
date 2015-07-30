@@ -36,6 +36,7 @@ DISTFILES += \
     .gitignore \
     shaders/mixfragmentshader.glsl \
     shaders/mixvertexshader.glsl \
+    shaders/mix2.glsl
 
 RESOURCES += \
     w-1.qrc

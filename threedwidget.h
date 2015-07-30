@@ -28,13 +28,20 @@
 
 #include <Kinect.h>
 
+#include "globals.h"
+
 class ThreeDWidgetPrivate;
 
 class ThreeDWidget : public QGLWidget, protected QOpenGLFunctions
 {
+  Q_OBJECT
+
 public:
-  ThreeDWidget(QWidget *parent = nullptr);
+  explicit ThreeDWidget(QWidget *parent = nullptr);
    ~ThreeDWidget();
+
+  virtual QSize minimumSizeHint(void) const { return QSize(ColorWidth / 4, ColorHeight / 4); }
+  virtual QSize sizeHint(void) const { return QSize(ColorWidth, ColorHeight); }
 
   void setVideoData(INT64 nTime, const uchar *pBuffer, int nWidth, int nHeight);
   void setDepthData(INT64 nTime, const UINT16 *pBuffer, int nWidth, int nHeight, int nMinDepth, int nMaxDepth);
@@ -43,8 +50,11 @@ public:
   void setSaturation(GLfloat);
   void setGamma(GLfloat);
 
-  void setNearThreshold(int);
-  void setFarThreshold(int);
+  void setNearThreshold(GLuint);
+  void setFarThreshold(GLuint);
+
+signals:
+  void ready(void);
 
 protected:
   void initializeGL(void);

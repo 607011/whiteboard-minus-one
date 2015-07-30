@@ -1,18 +1,18 @@
-// Copyright (c) 2012-2015 Oliver Lau <ola@ct.de>
+// Copyright (c) 2015 Oliver Lau <ola@ct.de>
 // All rights reserved.
 
-#ifdef GL_ES
-precision mediump int;
-precision mediump float;
-#endif
+#version 130
+#extension GL_EXT_gpu_shader4 : enable
 
-attribute vec4 aVertex;
-attribute vec4 aTexCoord;
-varying vec4 vTexCoord;
+in vec4 aVertex;
+in vec4 aTexCoord;
+
 uniform mat4 uMatrix;
+
+smooth out vec2 vTexCoord;
 
 void main(void)
 {
-  vTexCoord = aTexCoord;
+  vTexCoord = aTexCoord.st;
   gl_Position = uMatrix * aVertex;
 }

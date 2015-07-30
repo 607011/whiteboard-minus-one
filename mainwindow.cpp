@@ -80,6 +80,8 @@ MainWindow::MainWindow(QWidget *parent)
 {
   Q_D(MainWindow);
 
+  qDebug() << "MainWindow::MainWindow()";
+
   ui->setupUi(this);
 
   initKinect();
@@ -100,19 +102,31 @@ MainWindow::MainWindow(QWidget *parent)
   QObject::connect(ui->contrastDoubleSpinBox, SIGNAL(valueChanged(double)), SLOT(contrastChanged(double)));
   QObject::connect(ui->saturationDoubleSpinBox, SIGNAL(valueChanged(double)), SLOT(saturationChanged(double)));
   QObject::connect(ui->actionMapFromColorToDepth, SIGNAL(toggled(bool)), d->rgbdWidget, SLOT(setMapFromColorToDepth(bool)));
-  QObject::connect(ui->farVerticalSlider, SIGNAL(valueChanged(int)), SLOT(farThresholdChanged(int)));
-  QObject::connect(ui->nearVerticalSlider, SIGNAL(valueChanged(int)), SLOT(nearThresholdChanged(int)));
+  QObject::connect(ui->farVerticalSlider, SIGNAL(valueChanged(int)), SLOT(setFarThreshold(int)));
+  QObject::connect(ui->nearVerticalSlider, SIGNAL(valueChanged(int)), SLOT(setNearThreshold(int)));
 
-  ui->actionMapFromColorToDepth->setChecked(true);
-
-  d->timer.start();
-  startTimer(1000 / 25, Qt::PreciseTimer);
+  QObject::connect(d->threeDWidget, SIGNAL(ready()), SLOT(initAfterGL()));
 }
 
 
 MainWindow::~MainWindow()
 {
   delete ui;
+}
+
+
+void MainWindow::initAfterGL(void)
+{
+  Q_D(MainWindow);
+  qDebug() << "MainWindow::initAfterGL()";
+  ui->actionMapFromColorToDepth->setChecked(true);
+  ui->nearVerticalSlider->setValue(1100);
+  ui->farVerticalSlider->setValue(2400);
+  ui->saturationDoubleSpinBox->setValue(1.0);
+  ui->gammaDoubleSpinBox->setValue(2.2);
+  ui->contrastDoubleSpinBox->setValue(1.0);
+  d->timer.start();
+  startTimer(1000 / 25, Qt::PreciseTimer);
 }
 
 
@@ -203,6 +217,9 @@ void MainWindow::timerEvent(QTimerEvent*)
 bool MainWindow::initKinect(void)
 {
   Q_D(MainWindow);
+
+  qDebug() << "MainWindow::initKinect()";
+
   HRESULT hr;
 
   hr = GetDefaultKinectSensor(&d->kinectSensor);
@@ -257,11 +274,12 @@ void MainWindow::saturationChanged(double saturation)
 }
 
 
-void MainWindow::nearThresholdChanged(int value)
+void MainWindow::setNearThreshold(int value)
 {
   Q_D(MainWindow);
   if (value < ui->farVerticalSlider->value()) {
     d->rgbdWidget->setNearThreshold(value);
+    d->threeDWidget->setNearThreshold((GLuint)value);
   }
   else {
     ui->farVerticalSlider->setValue(value);
@@ -269,13 +287,15 @@ void MainWindow::nearThresholdChanged(int value)
 }
 
 
-void MainWindow::farThresholdChanged(int value)
+void MainWindow::setFarThreshold(int value)
 {
   Q_D(MainWindow);
   if (value > ui->nearVerticalSlider->value()) {
     d->rgbdWidget->setFarThreshold(value);
+    d->threeDWidget->setFarThreshold((GLuint)value);
   }
   else {
     ui->nearVerticalSlider->setValue(value);
   }
 }
+
