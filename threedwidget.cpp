@@ -190,12 +190,15 @@ void ThreeDWidget::makeShader(void)
   Q_ASSERT_X(d->mixShaderProgramIsValid(), "error in shader program", "error in shader program");
 
   d->videoTextureLocation = d->mixShaderProgram->uniformLocation("uVideoTexture");
-  Q_ASSERT(d->videoTextureLocation != GL_INVALID_INDEX);
   d->mixShaderProgram->setUniformValue(d->videoTextureLocation, 0);
+
   d->depthTextureLocation = d->mixShaderProgram->uniformLocation("uDepthTexture");
-  Q_ASSERT(d->depthTextureLocation != GL_INVALID_INDEX);
   d->mixShaderProgram->setUniformValue(d->depthTextureLocation, 1);
-  qDebug() << "texture locations:" << d->videoTextureLocation << d->depthTextureLocation;
+
+  d->mapTextureLocation = d->mixShaderProgram->uniformLocation("uMapTexture");
+  d->mixShaderProgram->setUniformValue(d->mapTextureLocation, 2);
+
+  qDebug() << "texture locations:" << d->videoTextureLocation << d->depthTextureLocation << d->mapTextureLocation;
 
   d->locGamma = d->mixShaderProgram->uniformLocation("uGamma");
   d->locContrast = d->mixShaderProgram->uniformLocation("uContrast");
@@ -295,12 +298,14 @@ void ThreeDWidget::paintGL(void)
     qDebug() << "hasOpenGLFeature(QOpenGLFunctions::Multitexture) ==" << hasOpenGLFeature(QOpenGLFunctions::Multitexture);
     qDebug() << "hasOpenGLFeature(QOpenGLFunctions::Shaders) ==" << hasOpenGLFeature(QOpenGLFunctions::Shaders);
     qDebug() << "hasOpenGLFeature(QOpenGLFunctions::Framebuffers) ==" << hasOpenGLFeature(QOpenGLFunctions::Framebuffers);
-    GLint h0 = 0, h1 = 0;
+    GLint h0 = 0, h1 = 0, h2 = 0;
     glActiveTexture(GL_TEXTURE0);
     glGetIntegerv(GL_ACTIVE_TEXTURE, &h0);
     glActiveTexture(GL_TEXTURE1);
     glGetIntegerv(GL_ACTIVE_TEXTURE, &h1);
-    qDebug() << h0 << h1;
+    glActiveTexture(GL_TEXTURE2);
+    glGetIntegerv(GL_ACTIVE_TEXTURE, &h2);
+    qDebug() << h0 << h1 << h2;
     emit ready();
   }
 
@@ -396,6 +401,7 @@ void ThreeDWidget::setVideoData(INT64 nTime, const uchar *pBuffer, int nWidth, i
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, d->videoTextureHandle);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, nWidth, nHeight, 0, GL_BGRA, GL_UNSIGNED_BYTE, pBuffer);
+  Q_ASSERT_X(glGetError() == GL_NO_ERROR, "OpenGL error", "OpenGL error");
 
   // QImage(pBuffer, nWidth, nHeight, QImage::Format_ARGB32).save(QString("images/%1.jpg").arg(nTime, 14, 10, QChar('0')), "JPG", 50);
   updateGL();
@@ -414,14 +420,19 @@ void ThreeDWidget::setDepthData(INT64 nTime, const UINT16 *pBuffer, int nWidth, 
 
   glActiveTexture(GL_TEXTURE1);
   glBindTexture(GL_TEXTURE_2D, d->depthTextureHandle);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_R16UI, nWidth, nHeight, 0, GL_RED_INTEGER, GL_UNSIGNED_SHORT, pBuffer);
-
-
-  // TODO: depth map as usampler2D !!!
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_R16UI, DepthWidth, DepthHeight, 0, GL_RED_INTEGER, GL_UNSIGNED_SHORT, pBuffer);
+  Q_ASSERT_X(glGetError() == GL_NO_ERROR, "OpenGL error", "OpenGL error");
 
   HRESULT hr = d->coordinateMapper->MapColorFrameToDepthSpace(DepthSize, pBuffer, ColorSize, d->depthSpaceData);
   if (FAILED(hr))
     qWarning() << "MapColorFrameToDepthSpace() failed.";
+  glActiveTexture(GL_TEXTURE2);
+  glBindTexture(GL_TEXTURE_2D, d->mapTextureHandle);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RG, ColorWidth, ColorHeight, 0, GL_RG, GL_UNSIGNED_BYTE, d->depthSpaceData);
+  GLenum err = glGetError();
+  if (err != GL_NO_ERROR) {
+    qWarning() << "glTexImage2D() failed with error code" << err;
+  }
 
 #if 1
   // d->depthImage.save(QString("images/%1.jpg").arg(nTime, 14, 10, QChar('0')), "JPG", 50);

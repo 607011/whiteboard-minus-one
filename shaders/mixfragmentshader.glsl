@@ -7,6 +7,7 @@
 smooth in vec2 vTexCoord;
 uniform usampler2D uDepthTexture;
 uniform sampler2D uVideoTexture;
+uniform sampler2D uMapTexture;
 uniform float uGamma;
 uniform float uContrast;
 uniform float uSaturation;
@@ -27,14 +28,12 @@ void main(void)
     color = vec3(0.980, 0.173, 0.345); // red
   }
   else {
-//    color = texture2D(uVideoTexture, vTexCoord).rgb;
-//    color = pow(color, vec3(1.0 / uGamma));
-//    color = (color - 0.5) * uContrast + 0.5;
-//    float luminance = dot(color, vec3(0.2125, 0.7154, 0.0721));
-//    vec3 gray = vec3(luminance);
-//    color = mix(gray, color, uSaturation);
     color = texture2D(uVideoTexture, vTexCoord).rgb;
-    // color = vec3(uSaturation, uGamma, uContrast);
+    color = pow(color, vec3(1.0 / uGamma));
+    color = (color - 0.5) * uContrast + 0.5;
+    float luminance = dot(color, vec3(0.2125, 0.7154, 0.0721));
+    vec3 gray = vec3(luminance);
+    color = mix(gray, color, uSaturation);
   }
   gl_FragColor = vec4(color, 1.0);
 }
