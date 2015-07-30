@@ -190,13 +190,12 @@ void RGBDWidget::setDepthData(INT64 nTime, const UINT16 *pBuffer, int nWidth, in
   d->maxDepth = nMaxDepth;
 
   if (d->mapFromColorToDepth) {
-    memcpy_s(d->depthData, DepthSize * sizeof(UINT16), pBuffer, DepthSize * sizeof(UINT16));
-    HRESULT hr = d->coordinateMapper->MapColorFrameToDepthSpace(DepthWidth * DepthHeight, pBuffer, ColorWidth * ColorHeight, d->depthSpaceData);
+    HRESULT hr = d->coordinateMapper->MapColorFrameToDepthSpace(DepthSize, pBuffer, ColorSize, d->depthSpaceData);
     if (FAILED(hr))
       qWarning() << "MapColorFrameToDepthSpace() failed.";
   }
   else {
-    HRESULT hr = d->coordinateMapper->MapDepthFrameToColorSpace(DepthWidth * DepthHeight, pBuffer, DepthWidth * DepthHeight, d->colorSpaceData);
+    HRESULT hr = d->coordinateMapper->MapDepthFrameToColorSpace(DepthSize, pBuffer, DepthSize, d->colorSpaceData);
     if (FAILED(hr))
       qWarning() << "MapDepthFrameToColorSpace() failed.";
   }
