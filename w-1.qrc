@@ -2,6 +2,5 @@
     <qresource prefix="/shaders">
         <file alias="mixfragmentshader.glsl">shaders/mixfragmentshader.glsl</file>
         <file alias="mixvertexshader.glsl">shaders/mixvertexshader.glsl</file>
-        <file alias="mix2.glsl">shaders/mix2.glsl</file>
     </qresource>
 </RCC>
