@@ -63,6 +63,19 @@ static GLfloat SharpeningKernel[9] = {
 static const int PROGRAM_VERTEX_ATTRIBUTE = 0;
 static const int PROGRAM_TEXCOORD_ATTRIBUTE = 1;
 
+struct DSP {
+  DSP(void)
+    : x(0)
+    , y(0)
+  { /* ... */ }
+  DSP(UINT16 x, UINT16 y)
+    : x(x)
+    , y(y)
+  { /* ... */ }
+  UINT16 x;
+  UINT16 y;
+};
+
 class ThreeDWidgetPrivate {
 public:
   ThreeDWidgetPrivate(void)
@@ -74,6 +87,7 @@ public:
     , imageFBO(nullptr)
     , mixShaderProgram(nullptr)
     , depthSpaceData(new DepthSpacePoint[ColorSize])
+    , depthSpaceDataINT16(new DSP[ColorSize])
     , timestamp(0)
     , firstPaintEventPending(true)
   {
@@ -104,11 +118,14 @@ public:
   IKinectSensor *kinectSensor;
   ICoordinateMapper *coordinateMapper;
   DepthSpacePoint *depthSpaceData;
+  DSP *depthSpaceDataINT16;
 
+  GLuint imageTextureHandle;
   GLuint videoTextureHandle;
   GLuint depthTextureHandle;
   GLuint mapTextureHandle;
 
+  int imageTextureLocation;
   int videoTextureLocation;
   int depthTextureLocation;
   int mapTextureLocation;
@@ -125,7 +142,6 @@ public:
   QPoint lastMousePos;
   INT64 timestamp;
   bool firstPaintEventPending;
-  QMutex mtx;
 };
 
 
@@ -239,6 +255,14 @@ void ThreeDWidget::initializeGL(void)
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
 
+  glGenTextures(1, &d->imageTextureHandle);
+  glActiveTexture(GL_TEXTURE3);
+  glBindTexture(GL_TEXTURE_2D, d->imageTextureHandle);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+
   d->imageFBO = new QGLFramebufferObject(ColorWidth, ColorHeight);
 
   makeWorldMatrix();
@@ -270,18 +294,19 @@ void ThreeDWidget::paintGL(void)
     qDebug() << "hasOpenGLFeature(QOpenGLFunctions::Shaders) ==" << hasOpenGLFeature(QOpenGLFunctions::Shaders);
     qDebug() << "hasOpenGLFeature(QOpenGLFunctions::Framebuffers) ==" << hasOpenGLFeature(QOpenGLFunctions::Framebuffers);
     qDebug() << "doubleBuffer() ==" << doubleBuffer();
-    GLint h0 = 0, h1 = 0, h2 = 0;
+    GLint h0 = 0, h1 = 0, h2 = 0, h3 = 0;
     glActiveTexture(GL_TEXTURE0);
     glGetIntegerv(GL_ACTIVE_TEXTURE, &h0);
     glActiveTexture(GL_TEXTURE1);
     glGetIntegerv(GL_ACTIVE_TEXTURE, &h1);
     glActiveTexture(GL_TEXTURE2);
     glGetIntegerv(GL_ACTIVE_TEXTURE, &h2);
-    qDebug() << h0 << h1 << h2;
+    glActiveTexture(GL_TEXTURE2);
+    glGetIntegerv(GL_ACTIVE_TEXTURE, &h3);
+    qDebug() << h0 << h1 << h2 << h3;
     emit ready();
   }
   else {
-    QMutexLocker locker(&d->mtx);
     glClearColor(.15f, .15f, .15f, 1.f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -315,8 +340,6 @@ void ThreeDWidget::process(INT64 nTime, const uchar *pRGB, const UINT16 *pDepth,
 
   d->timestamp = nTime;
 
-  d->mtx.lock();
-
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, d->videoTextureHandle);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ColorWidth, ColorHeight, 0, GL_BGRA, GL_UNSIGNED_BYTE, pRGB);
@@ -330,13 +353,14 @@ void ThreeDWidget::process(INT64 nTime, const uchar *pRGB, const UINT16 *pDepth,
   HRESULT hr = d->coordinateMapper->MapColorFrameToDepthSpace(DepthSize, pDepth, ColorSize, d->depthSpaceData);
   if (FAILED(hr))
     qWarning() << "MapColorFrameToDepthSpace() failed.";
-
+  for (int i = 0; i < ColorSize; ++i) {
+    d->depthSpaceDataINT16[i].x = (INT16)d->depthSpaceData[i].X;
+    d->depthSpaceDataINT16[i].y = (INT16)d->depthSpaceData[i].Y;
+  }
   glActiveTexture(GL_TEXTURE2);
   glBindTexture(GL_TEXTURE_2D, d->mapTextureHandle);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RG, ColorWidth, ColorHeight, 0, GL_RG, GL_FLOAT, d->depthSpaceData);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RG16UI, ColorWidth, ColorHeight, 0, GL_RG_INTEGER, GL_UNSIGNED_SHORT, d->depthSpaceDataINT16);
   Q_ASSERT_X(glGetError() == GL_NO_ERROR, "ThreeDWidget::process()", "glTexImage2D() failed");
-
-  d->mtx.unlock();
 
   updateGL();
 }

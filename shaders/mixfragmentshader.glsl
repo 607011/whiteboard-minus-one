@@ -7,7 +7,7 @@
 smooth in vec2 vTexCoord;
 uniform usampler2D uDepthTexture;
 uniform sampler2D uVideoTexture;
-uniform sampler2D uMapTexture;
+uniform isampler2D uMapTexture;
 uniform float uGamma;
 uniform float uContrast;
 uniform float uSaturation;
@@ -17,26 +17,24 @@ uniform float uFarThreshold;
 uniform float uNearThreshold;
 uniform bool uMatchFrames;
 
-const vec2 DepthSize = vec2(512.0, 424.0);
+const ivec2 iDepthSize = ivec2(512, 424);
+const vec2 fDepthSize = vec2(iDepthSize);
 const vec2 ColorSize = vec2(1920.0, 1080.0);
 
 const vec3 TooNearColor = vec3(0.98, 0.173, 0.345);
 const vec3 TooFarColor = vec3(0.345, 0.173, 0.98);
 const vec3 InvalidDepthColor = vec3(0.345, 1.0, 0.25);
-const vec3 InvalidCoordinateColor = vec3(0.97, 0.99, 0.5);
 
 void main(void)
 {
   vec3 color = texture2D(uVideoTexture, vTexCoord).rgb;
-  vec2 dsp = texture2D(uMapTexture, vTexCoord).xy;
-  if (any(isinf(-dsp))) {
-    // color = InvalidCoordinateColor;
+  ivec2 dsp = texture2D(uMapTexture, vTexCoord).xy;
+  if (dsp.x < 0 || dsp.y < 0) {
     discard;
   }
   else {
-    dsp = clamp(dsp, vec2(0.0, 0.0), DepthSize);
-    dsp /= DepthSize;
-    vec2 coord = uMatchFrames ? dsp : vTexCoord;
+    dsp = clamp(dsp, ivec2(0, 0), iDepthSize);
+    vec2 coord = uMatchFrames ? vec2(dsp) / fDepthSize : vTexCoord;
     float depth = float(texture2D(uDepthTexture, coord).r);
     if (depth == 0.0) {
       // color = InvalidDepthColor;
