@@ -53,7 +53,6 @@ public:
   void setFarThreshold(GLuint);
 
 public slots:
-  void setMatchColorAndDepthSpace(bool);
 
 signals:
   void ready(void);

@@ -21,6 +21,8 @@
 #include "util.h"
 #include "rgbdwidget.h"
 
+#include <limits>
+
 #include <QDebug>
 #include <QImage>
 #include <QPainter>

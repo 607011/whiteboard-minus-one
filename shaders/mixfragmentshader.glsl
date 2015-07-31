@@ -15,7 +15,6 @@ uniform float uSharpen[9];
 uniform vec2 uOffset[9];
 uniform float uFarThreshold;
 uniform float uNearThreshold;
-uniform bool uMatchFrames;
 
 const ivec2 iDepthSize = ivec2(512, 424);
 const vec2 fDepthSize = vec2(iDepthSize);
@@ -33,11 +32,11 @@ void main(void)
     discard;
   }
   else {
-    dsp = clamp(dsp, ivec2(0, 0), iDepthSize);
-    vec2 coord = uMatchFrames ? vec2(dsp) / fDepthSize : vTexCoord;
+    // dsp = clamp(dsp, ivec2(0, 0), iDepthSize);
+    vec2 coord = vec2(dsp) / fDepthSize;
     float depth = float(texture2D(uDepthTexture, coord).r);
     if (depth == 0.0) {
-      // color = InvalidDepthColor;
+      color = InvalidDepthColor;
       discard;
     }
     else if (depth > uFarThreshold) {

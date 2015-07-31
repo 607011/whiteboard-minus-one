@@ -105,7 +105,6 @@ MainWindow::MainWindow(QWidget *parent)
   QObject::connect(ui->contrastDoubleSpinBox, SIGNAL(valueChanged(double)), SLOT(contrastChanged(double)));
   QObject::connect(ui->saturationDoubleSpinBox, SIGNAL(valueChanged(double)), SLOT(saturationChanged(double)));
   QObject::connect(ui->actionMapFromColorToDepth, SIGNAL(toggled(bool)), d->rgbdWidget, SLOT(setMapFromColorToDepth(bool)));
-  QObject::connect(ui->actionMatchColorAndDepthSpace, SIGNAL(toggled(bool)), d->threeDWidget, SLOT(setMatchColorAndDepthSpace(bool)));
   QObject::connect(ui->actionExit, SIGNAL(triggered(bool)),SLOT(close()));
   QObject::connect(ui->farVerticalSlider, SIGNAL(valueChanged(int)), SLOT(setFarThreshold(int)));
   QObject::connect(ui->nearVerticalSlider, SIGNAL(valueChanged(int)), SLOT(setNearThreshold(int)));

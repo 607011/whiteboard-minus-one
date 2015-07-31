@@ -165,7 +165,6 @@
      <string>Options</string>
     </property>
     <addaction name="actionMapFromColorToDepth"/>
-    <addaction name="actionMatchColorAndDepthSpace"/>
    </widget>
    <widget class="QMenu" name="menuFile">
     <property name="title">

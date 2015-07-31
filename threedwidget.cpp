@@ -20,6 +20,8 @@
 #include "util.h"
 #include "threedwidget.h"
 
+#include <limits>
+
 #include <QDebug>
 #include <QString>
 #include <QGLFramebufferObject>
@@ -137,7 +139,6 @@ public:
   int offsetLocation;
   int sharpenLocation;
   int mvMatrixLocation;
-  int matchFramesLocation;
 
   QPoint lastMousePos;
   INT64 timestamp;
@@ -206,7 +207,6 @@ void ThreeDWidget::makeShader(void)
   d->nearThresholdLocation = d->mixShaderProgram->uniformLocation("uNearThreshold");
   d->farThresholdLocation = d->mixShaderProgram->uniformLocation("uFarThreshold");
   d->mvMatrixLocation = d->mixShaderProgram->uniformLocation("uMatrix");
-  d->matchFramesLocation = d->mixShaderProgram->uniformLocation("uMatchFrames");
 
   d->sharpenLocation = d->mixShaderProgram->uniformLocation("uSharpen");
   d->mixShaderProgram->setUniformValueArray(d->sharpenLocation, SharpeningKernel, 9, 1);
@@ -275,6 +275,7 @@ void ThreeDWidget::resizeGL(int width, int height)
   Q_UNUSED(width);
   Q_UNUSED(height);
   qDebug() << "ThreeDWidget::resizeGL(" << width << "," << height << ")";
+  glViewport(0, 0, width, height);
 }
 
 
@@ -305,28 +306,26 @@ void ThreeDWidget::paintGL(void)
     glGetIntegerv(GL_ACTIVE_TEXTURE, &h3);
     qDebug() << h0 << h1 << h2 << h3;
     emit ready();
+    return;
   }
-  else {
-    glClearColor(.15f, .15f, .15f, 1.f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    if (d->imageFBO == nullptr || d->mixShaderProgram == nullptr || d->timestamp == 0)
-      return;
+  if (d->imageFBO == nullptr || d->mixShaderProgram == nullptr || d->timestamp == 0)
+    return;
 
-    d->mixShaderProgram->setAttributeArray(PROGRAM_TEXCOORD_ATTRIBUTE, TexCoords);
-    d->mixShaderProgram->setUniformValue(d->mvMatrixLocation, d->mvMatrix);
-    d->mixShaderProgram->bind();
+  glClearColor(.15f, .15f, .15f, 1.f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    glViewport(0, 0, width(), height());
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+  d->mixShaderProgram->setAttributeArray(PROGRAM_TEXCOORD_ATTRIBUTE, TexCoords);
+  d->mixShaderProgram->setUniformValue(d->mvMatrixLocation, d->mvMatrix);
+  d->mixShaderProgram->bind();
 
-    d->imageFBO->bind();
-    glViewport(0, 0, ColorWidth, ColorHeight);
-    d->mixShaderProgram->setUniformValue(d->mvMatrixLocation, QMatrix4x4());
-    d->mixShaderProgram->setAttributeArray(PROGRAM_TEXCOORD_ATTRIBUTE, TexCoords4FBO);
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-    d->imageFBO->release();
-  }
+  glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+  d->imageFBO->bind();
+  d->mixShaderProgram->setUniformValue(d->mvMatrixLocation, QMatrix4x4());
+  d->mixShaderProgram->setAttributeArray(PROGRAM_TEXCOORD_ATTRIBUTE, TexCoords4FBO);
+  glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+  d->imageFBO->release();
 }
 
 
@@ -336,7 +335,7 @@ void ThreeDWidget::process(INT64 nTime, const uchar *pRGB, const UINT16 *pDepth,
   Q_UNUSED(nMinReliableDist);
   Q_UNUSED(nMaxDist);
 
-  Q_ASSERT_X(pDepth != nullptr && pRGB != nullptr, "ThreeDWidget::process()", "RGB and depth pointers must not be null");
+  Q_ASSERT_X(pDepth != nullptr && pRGB != nullptr, "ThreeDWidget::process()", "RGB or depth pointer must not be null");
 
   d->timestamp = nTime;
 
@@ -353,9 +352,14 @@ void ThreeDWidget::process(INT64 nTime, const uchar *pRGB, const UINT16 *pDepth,
   HRESULT hr = d->coordinateMapper->MapColorFrameToDepthSpace(DepthSize, pDepth, ColorSize, d->depthSpaceData);
   if (FAILED(hr))
     qWarning() << "MapColorFrameToDepthSpace() failed.";
-  for (int i = 0; i < ColorSize; ++i) {
-    d->depthSpaceDataINT16[i].x = (INT16)d->depthSpaceData[i].X;
-    d->depthSpaceDataINT16[i].y = (INT16)d->depthSpaceData[i].Y;
+  DSP *dst = d->depthSpaceDataINT16;
+  const DepthSpacePoint *src = d->depthSpaceData;
+  const DepthSpacePoint *const srcEnd = d->depthSpaceData + ColorSize;
+  while (src < srcEnd) {
+    dst->x = (src->X == -std::numeric_limits<float>::infinity()) ? -1 : INT16(src->X);
+    dst->y = (src->Y == -std::numeric_limits<float>::infinity()) ? -1 : INT16(src->Y);
+    ++dst;
+    ++src;
   }
   glActiveTexture(GL_TEXTURE2);
   glBindTexture(GL_TEXTURE_2D, d->mapTextureHandle);
@@ -459,14 +463,5 @@ void ThreeDWidget::setFarThreshold(GLuint farThreshold)
   Q_D(ThreeDWidget);
   makeCurrent();
   d->mixShaderProgram->setUniformValue(d->farThresholdLocation, (GLfloat)farThreshold);
-  updateGL();
-}
-
-
-void ThreeDWidget::setMatchColorAndDepthSpace(bool doMatch)
-{
-  Q_D(ThreeDWidget);
-  makeCurrent();
-  d->mixShaderProgram->setUniformValue(d->matchFramesLocation, doMatch);
   updateGL();
 }
