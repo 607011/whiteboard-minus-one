@@ -70,12 +70,12 @@ struct DSP {
     : x(0)
     , y(0)
   { /* ... */ }
-  DSP(UINT16 x, UINT16 y)
-    : x(x)
-    , y(y)
+  DSP(const DepthSpacePoint *dsp)
+    : x((dsp->X == -std::numeric_limits<float>::infinity()) ? -1 : INT32(dsp->X))
+    , y((dsp->Y == -std::numeric_limits<float>::infinity()) ? -1 : INT32(dsp->Y))
   { /* ... */ }
-  UINT16 x;
-  UINT16 y;
+  UINT32 x;
+  UINT32 y;
 };
 
 class ThreeDWidgetPrivate {
@@ -85,11 +85,12 @@ public:
     , yRot(180.f)
     , xTrans(0.f)
     , yTrans(0.f)
-    , zoom(-2.93f)
+    , zoom(-2.77f)
+    , lastFrameFBO(nullptr)
     , imageFBO(nullptr)
     , mixShaderProgram(nullptr)
     , depthSpaceData(new DepthSpacePoint[ColorSize])
-    , depthSpaceDataINT16(new DSP[ColorSize])
+    , depthSpaceDataInteger(new DSP[ColorSize])
     , timestamp(0)
     , firstPaintEventPending(true)
   {
@@ -99,6 +100,7 @@ public:
   {
     SafeRelease(coordinateMapper);
     SafeDelete(mixShaderProgram);
+    SafeDelete(lastFrameFBO);
     SafeDelete(imageFBO);
     SafeDeleteArray(depthSpaceData);
   }
@@ -114,15 +116,15 @@ public:
   GLfloat zoom;
   QMatrix4x4 mvMatrix;
 
+  QGLFramebufferObject *lastFrameFBO;
   QGLFramebufferObject *imageFBO;
   QGLShaderProgram *mixShaderProgram;
 
   IKinectSensor *kinectSensor;
   ICoordinateMapper *coordinateMapper;
   DepthSpacePoint *depthSpaceData;
-  DSP *depthSpaceDataINT16;
+  DSP *depthSpaceDataInteger;
 
-  GLuint imageTextureHandle;
   GLuint videoTextureHandle;
   GLuint depthTextureHandle;
   GLuint mapTextureHandle;
@@ -139,6 +141,7 @@ public:
   int offsetLocation;
   int sharpenLocation;
   int mvMatrixLocation;
+  int renderForFBOLocation;
 
   QPoint lastMousePos;
   INT64 timestamp;
@@ -146,7 +149,7 @@ public:
 };
 
 
-static const QGLFormat DefaultGLFormat = QGLFormat(QGL::SingleBuffer | QGL::NoDepthBuffer | QGL::AlphaChannel | QGL::NoAccumBuffer | QGL::NoStencilBuffer | QGL::NoStereoBuffers | QGL::HasOverlay | QGL::NoSampleBuffers);
+static const QGLFormat DefaultGLFormat = QGLFormat(QGL::DoubleBuffer | QGL::NoDepthBuffer | QGL::AlphaChannel | QGL::NoAccumBuffer | QGL::NoStencilBuffer | QGL::NoStereoBuffers | QGL::HasOverlay | QGL::NoSampleBuffers);
 
 ThreeDWidget::ThreeDWidget(QWidget *parent)
   : QGLWidget(DefaultGLFormat, parent)
@@ -199,7 +202,10 @@ void ThreeDWidget::makeShader(void)
   d->mapTextureLocation = d->mixShaderProgram->uniformLocation("uMapTexture");
   d->mixShaderProgram->setUniformValue(d->mapTextureLocation, 2);
 
-  qDebug() << "texture locations:" << d->videoTextureLocation << d->depthTextureLocation << d->mapTextureLocation;
+  d->imageTextureLocation = d->mixShaderProgram->uniformLocation("uImageTexture");
+  d->mixShaderProgram->setUniformValue(d->imageTextureLocation, 3);
+
+  qDebug() << "texture locations:" << d->videoTextureLocation << d->depthTextureLocation << d->mapTextureLocation << d->imageTextureLocation;
 
   d->gammaLocation = d->mixShaderProgram->uniformLocation("uGamma");
   d->contrastLocation = d->mixShaderProgram->uniformLocation("uContrast");
@@ -207,6 +213,7 @@ void ThreeDWidget::makeShader(void)
   d->nearThresholdLocation = d->mixShaderProgram->uniformLocation("uNearThreshold");
   d->farThresholdLocation = d->mixShaderProgram->uniformLocation("uFarThreshold");
   d->mvMatrixLocation = d->mixShaderProgram->uniformLocation("uMatrix");
+  d->renderForFBOLocation = d->mixShaderProgram->uniformLocation("uRenderForFBO");
 
   d->sharpenLocation = d->mixShaderProgram->uniformLocation("uSharpen");
   d->mixShaderProgram->setUniformValueArray(d->sharpenLocation, SharpeningKernel, 9, 1);
@@ -255,15 +262,22 @@ void ThreeDWidget::initializeGL(void)
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
 
-  glGenTextures(1, &d->imageTextureHandle);
+  d->imageFBO = new QGLFramebufferObject(ColorWidth, ColorHeight);
+  d->lastFrameFBO = new QGLFramebufferObject(ColorWidth, ColorHeight);
+
   glActiveTexture(GL_TEXTURE3);
-  glBindTexture(GL_TEXTURE_2D, d->imageTextureHandle);
+  glBindTexture(GL_TEXTURE_2D, d->lastFrameFBO->texture());
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
 
-  d->imageFBO = new QGLFramebufferObject(ColorWidth, ColorHeight);
+  glActiveTexture(GL_TEXTURE4);
+  glBindTexture(GL_TEXTURE_2D, d->imageFBO->texture());
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
 
   makeWorldMatrix();
   makeShader();
@@ -275,7 +289,6 @@ void ThreeDWidget::resizeGL(int width, int height)
   Q_UNUSED(width);
   Q_UNUSED(height);
   qDebug() << "ThreeDWidget::resizeGL(" << width << "," << height << ")";
-  glViewport(0, 0, width, height);
 }
 
 
@@ -294,38 +307,48 @@ void ThreeDWidget::paintGL(void)
     qDebug() << "hasOpenGLFeature(QOpenGLFunctions::Multitexture) ==" << hasOpenGLFeature(QOpenGLFunctions::Multitexture);
     qDebug() << "hasOpenGLFeature(QOpenGLFunctions::Shaders) ==" << hasOpenGLFeature(QOpenGLFunctions::Shaders);
     qDebug() << "hasOpenGLFeature(QOpenGLFunctions::Framebuffers) ==" << hasOpenGLFeature(QOpenGLFunctions::Framebuffers);
+    qDebug() << "QGLFramebufferObject::hasOpenGLFramebufferBlit() ==" << QGLFramebufferObject::hasOpenGLFramebufferBlit();
     qDebug() << "doubleBuffer() ==" << doubleBuffer();
-    GLint h0 = 0, h1 = 0, h2 = 0, h3 = 0;
+    GLint h0 = 0, h1 = 0, h2 = 0, h3 = 0, h4 = 0;
     glActiveTexture(GL_TEXTURE0);
     glGetIntegerv(GL_ACTIVE_TEXTURE, &h0);
     glActiveTexture(GL_TEXTURE1);
     glGetIntegerv(GL_ACTIVE_TEXTURE, &h1);
     glActiveTexture(GL_TEXTURE2);
     glGetIntegerv(GL_ACTIVE_TEXTURE, &h2);
-    glActiveTexture(GL_TEXTURE2);
+    glActiveTexture(GL_TEXTURE3);
     glGetIntegerv(GL_ACTIVE_TEXTURE, &h3);
-    qDebug() << h0 << h1 << h2 << h3;
+    glActiveTexture(GL_TEXTURE4);
+    glGetIntegerv(GL_ACTIVE_TEXTURE, &h4);
+    qDebug() << "texture handles:" << h0 << h1 << h2 << h3 << h4;
     emit ready();
     return;
   }
 
-  if (d->imageFBO == nullptr || d->mixShaderProgram == nullptr || d->timestamp == 0)
+  if (d->lastFrameFBO == nullptr || d->imageFBO == nullptr || d->mixShaderProgram == nullptr || d->timestamp == 0)
     return;
 
+  //  d->mixShaderProgram->setAttributeArray(PROGRAM_TEXCOORD_ATTRIBUTE, TexCoords);
+  d->mixShaderProgram->setUniformValue(d->mvMatrixLocation, d->mvMatrix);
+  d->mixShaderProgram->setUniformValue(d->renderForFBOLocation, false);
   glClearColor(.15f, .15f, .15f, 1.f);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-  d->mixShaderProgram->setAttributeArray(PROGRAM_TEXCOORD_ATTRIBUTE, TexCoords);
-  d->mixShaderProgram->setUniformValue(d->mvMatrixLocation, d->mvMatrix);
-  d->mixShaderProgram->bind();
-
+  glViewport(0, 0, width(), height());
   glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
   d->imageFBO->bind();
+  //  d->mixShaderProgram->setAttributeArray(PROGRAM_TEXCOORD_ATTRIBUTE, TexCoords);
   d->mixShaderProgram->setUniformValue(d->mvMatrixLocation, QMatrix4x4());
-  d->mixShaderProgram->setAttributeArray(PROGRAM_TEXCOORD_ATTRIBUTE, TexCoords4FBO);
+  d->mixShaderProgram->setUniformValue(d->renderForFBOLocation, true);
+  glClearColor(.6784f, 1.f, .1874f, 1.f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glViewport(0, 0, d->imageFBO->width(), d->imageFBO->height());
   glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+  glActiveTexture(GL_TEXTURE3);
+  glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 0, 0, d->imageFBO->width(), d->imageFBO->height(), 0);
   d->imageFBO->release();
+
+  // d->lastFrameFBO->toImage().save(QString("images/%1.jpg").arg(d->timestamp, 14, 10, QChar('0')), "JPG", 30);
 }
 
 
@@ -339,6 +362,15 @@ void ThreeDWidget::process(INT64 nTime, const uchar *pRGB, const UINT16 *pDepth,
 
   d->timestamp = nTime;
 
+  HRESULT hr = d->coordinateMapper->MapColorFrameToDepthSpace(DepthSize, pDepth, ColorSize, d->depthSpaceData);
+  if (FAILED(hr))
+    qWarning() << "MapColorFrameToDepthSpace() failed.";
+  DSP *dst = d->depthSpaceDataInteger;
+  const DepthSpacePoint *src = d->depthSpaceData;
+  const DepthSpacePoint *const srcEnd = d->depthSpaceData + ColorSize;
+  while (src < srcEnd)
+    *dst++ = src++;
+
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, d->videoTextureHandle);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ColorWidth, ColorHeight, 0, GL_BGRA, GL_UNSIGNED_BYTE, pRGB);
@@ -349,22 +381,13 @@ void ThreeDWidget::process(INT64 nTime, const uchar *pRGB, const UINT16 *pDepth,
   glTexImage2D(GL_TEXTURE_2D, 0, GL_R16UI, DepthWidth, DepthHeight, 0, GL_RED_INTEGER, GL_UNSIGNED_SHORT, pDepth);
   Q_ASSERT_X(glGetError() == GL_NO_ERROR, "ThreeDWidget::process()", "glTexImage2D() failed");
 
-  HRESULT hr = d->coordinateMapper->MapColorFrameToDepthSpace(DepthSize, pDepth, ColorSize, d->depthSpaceData);
-  if (FAILED(hr))
-    qWarning() << "MapColorFrameToDepthSpace() failed.";
-  DSP *dst = d->depthSpaceDataINT16;
-  const DepthSpacePoint *src = d->depthSpaceData;
-  const DepthSpacePoint *const srcEnd = d->depthSpaceData + ColorSize;
-  while (src < srcEnd) {
-    dst->x = (src->X == -std::numeric_limits<float>::infinity()) ? -1 : INT16(src->X);
-    dst->y = (src->Y == -std::numeric_limits<float>::infinity()) ? -1 : INT16(src->Y);
-    ++dst;
-    ++src;
-  }
   glActiveTexture(GL_TEXTURE2);
   glBindTexture(GL_TEXTURE_2D, d->mapTextureHandle);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RG16UI, ColorWidth, ColorHeight, 0, GL_RG_INTEGER, GL_UNSIGNED_SHORT, d->depthSpaceDataINT16);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RG32I, ColorWidth, ColorHeight, 0, GL_RG_INTEGER, GL_INT, d->depthSpaceDataInteger);
   Q_ASSERT_X(glGetError() == GL_NO_ERROR, "ThreeDWidget::process()", "glTexImage2D() failed");
+
+  glActiveTexture(GL_TEXTURE3);
+  glBindTexture(GL_TEXTURE_2D, d->lastFrameFBO->texture());
 
   updateGL();
 }
