@@ -110,6 +110,8 @@ MainWindow::MainWindow(QWidget *parent)
   QObject::connect(ui->nearVerticalSlider, SIGNAL(valueChanged(int)), SLOT(setNearThreshold(int)));
 
   QObject::connect(d->threeDWidget, SIGNAL(ready()), SLOT(initAfterGL()));
+
+  showMaximized();
 }
 
 
@@ -125,11 +127,11 @@ void MainWindow::initAfterGL(void)
   qDebug() << "MainWindow::initAfterGL()";
   ui->actionMapFromColorToDepth->setChecked(true);
   ui->actionMatchColorAndDepthSpace->setChecked(true);
-  ui->nearVerticalSlider->setValue(1100);
-  ui->farVerticalSlider->setValue(2400);
-  ui->saturationDoubleSpinBox->setValue(1.0);
-  ui->gammaDoubleSpinBox->setValue(2.2);
-  ui->contrastDoubleSpinBox->setValue(1.0);
+  ui->nearVerticalSlider->setValue(1564);
+  ui->farVerticalSlider->setValue(1954);
+  ui->saturationDoubleSpinBox->setValue(1.3);
+  ui->gammaDoubleSpinBox->setValue(1.4);
+  ui->contrastDoubleSpinBox->setValue(1.1);
   d->timer.start();
   startTimer(1000 / 25, Qt::PreciseTimer);
 }
