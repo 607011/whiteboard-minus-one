@@ -176,8 +176,8 @@ void ThreeDWidget::makeShader(void)
   Q_D(ThreeDWidget);
   qDebug() << "ThreeDWidget::makeShader()";
   SafeRenew(d->mixShaderProgram, new QGLShaderProgram);
-  d->mixShaderProgram->addShaderFromSourceFile(QGLShader::Fragment, ":/shaders/mixfragmentshader.glsl");
-  d->mixShaderProgram->addShaderFromSourceFile(QGLShader::Vertex, ":/shaders/mixvertexshader.glsl");
+  d->mixShaderProgram->addShaderFromSourceFile(QGLShader::Fragment, ":/shaders/mix.fs.glsl");
+  d->mixShaderProgram->addShaderFromSourceFile(QGLShader::Vertex, ":/shaders/mix.vs.glsl");
   d->mixShaderProgram->bindAttributeLocation("aVertex", PROGRAM_VERTEX_ATTRIBUTE);
   d->mixShaderProgram->bindAttributeLocation("aTexCoord", PROGRAM_TEXCOORD_ATTRIBUTE);
   d->mixShaderProgram->enableAttributeArray(PROGRAM_VERTEX_ATTRIBUTE);

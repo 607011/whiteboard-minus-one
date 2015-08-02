@@ -1,6 +1,6 @@
 <RCC>
     <qresource prefix="/shaders">
-        <file alias="mixfragmentshader.glsl">shaders/mixfragmentshader.glsl</file>
-        <file alias="mixvertexshader.glsl">shaders/mixvertexshader.glsl</file>
+        <file alias="mix.fs.glsl">shaders/mix.fs.glsl</file>
+        <file alias="mix.vs.glsl">shaders/mix.vs.glsl</file>
     </qresource>
 </RCC>
