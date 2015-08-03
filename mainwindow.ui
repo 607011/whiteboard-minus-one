@@ -139,8 +139,11 @@
       </item>
       <item>
        <widget class="QSlider" name="haloRadiusVerticalSlider">
+        <property name="minimum">
+         <number>1</number>
+        </property>
         <property name="maximum">
-         <number>20</number>
+         <number>16</number>
         </property>
         <property name="orientation">
          <enum>Qt::Vertical</enum>

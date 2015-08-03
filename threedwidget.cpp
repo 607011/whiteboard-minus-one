@@ -345,8 +345,8 @@ void ThreeDWidget::paintGL(void)
   d->imageFBO->bind();
   d->mixShaderProgram->setAttributeArray(PROGRAM_VERTEX_ATTRIBUTE, Vertices4FBO);
   d->mixShaderProgram->setUniformValue(d->mvMatrixLocation, QMatrix4x4());
-  glClearColor(.6784f, 1.f, .1874f, 1.f);
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+//  glClearColor(.6784f, 1.f, .1874f, 1.f);
+//  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glViewport(0, 0, d->imageFBO->width(), d->imageFBO->height());
   glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
   glActiveTexture(GL_TEXTURE3);
@@ -423,7 +423,7 @@ void ThreeDWidget::mouseMoveEvent(QMouseEvent *e)
   }
   else if (e->buttons() & Qt::RightButton) {
     d->xTrans += .01f * (e->x() - d->lastMousePos.x());
-    d->yTrans += .01f * (e->y() - d->lastMousePos.y());
+    d->yTrans -= .01f * (e->y() - d->lastMousePos.y());
   }
   d->lastMousePos = e->pos();
   makeWorldMatrix();
