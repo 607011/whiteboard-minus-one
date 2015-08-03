@@ -14,12 +14,28 @@ uniform float uContrast;
 uniform float uSaturation;
 uniform float uSharpen[9];
 uniform vec2 uOffset[9];
+uniform vec2 uHalo[1024];
+uniform int uHaloRadius;
 uniform float uFarThreshold;
 uniform float uNearThreshold;
+uniform bool uRenderForFBO;
 
 const ivec2 iDepthSize = ivec2(512, 424);
 const vec2 fDepthSize = vec2(iDepthSize);
-const vec2 fColorSize = vec2(1920.0, 1080.0);
+const ivec2 iColorSize = ivec2(1920, 1080);
+const vec2 fColorSize = vec2(iColorSize);
+
+
+bool allDepthsValidWithinHalo(vec2 coord) {
+  int N = 2 * 2 * uHaloRadius * uHaloRadius;
+  for (int i = 0; i < N; ++i) {
+    float depth = float(texture2D(uDepthTexture, coord + uHalo[i]).r);
+    if (depth < uNearThreshold || depth > uFarThreshold)
+      return false;
+  }
+  return true;
+}
+
 
 void main(void)
 {
@@ -29,7 +45,7 @@ void main(void)
     discard;
   vec2 coord = vec2(dsp) / fDepthSize;
   float depth = float(texture2D(uDepthTexture, coord).r);
-  if (depth > uNearThreshold && depth < uFarThreshold) {
+  if (allDepthsValidWithinHalo(coord)) {
     color = texture2D(uVideoTexture, vTexCoord).rgb;
     for (int i = 0; i < 9; ++i) {
       vec3 c = texture2D(uVideoTexture, vTexCoord + uOffset[i] / fColorSize).rgb;
@@ -40,10 +56,6 @@ void main(void)
     vec3 gray = vec3(luminance);
     color = mix(gray, color, uSaturation);
     color = (color - 0.5) * uContrast + 0.5;
-  }
-  else if (depth == 0.0) {
-    color = vec3(0.7, 1.0, 0.3);
-    discard;
   }
   else {
     color = texture2D(uImageTexture, vTexCoord).rgb;

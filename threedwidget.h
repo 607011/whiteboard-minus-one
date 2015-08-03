@@ -49,10 +49,11 @@ public:
   void setSaturation(GLfloat);
   void setGamma(GLfloat);
 
-  void setNearThreshold(GLuint);
-  void setFarThreshold(GLuint);
+  void setNearThreshold(GLfloat);
+  void setFarThreshold(GLfloat);
 
 public slots:
+  void setHaloRadius(int);
 
 signals:
   void ready(void);
@@ -73,7 +74,6 @@ private:
 
   void makeShader(void);
   void makeWorldMatrix(void);
-  void updateViewport(int width, int height);
 };
 
 

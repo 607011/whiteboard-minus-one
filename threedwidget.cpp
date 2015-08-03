@@ -31,6 +31,7 @@
 #include <QVector3D>
 #include <QMutexLocker>
 #include <QImage>
+#include <QFile>
 
 #include <Kinect.h>
 
@@ -93,6 +94,8 @@ public:
     , depthSpaceDataInteger(new DSP[ColorSize])
     , timestamp(0)
     , firstPaintEventPending(true)
+    , haloRadius(0)
+    , halo(nullptr)
   {
     // ...
   }
@@ -120,6 +123,9 @@ public:
   QGLFramebufferObject *imageFBO;
   QGLShaderProgram *mixShaderProgram;
 
+  int haloRadius;
+  QVector2D *halo;
+
   IKinectSensor *kinectSensor;
   ICoordinateMapper *coordinateMapper;
   DepthSpacePoint *depthSpaceData;
@@ -129,23 +135,26 @@ public:
   GLuint depthTextureHandle;
   GLuint mapTextureHandle;
 
-  int imageTextureLocation;
-  int videoTextureLocation;
-  int depthTextureLocation;
-  int mapTextureLocation;
-  int nearThresholdLocation;
-  int farThresholdLocation;
-  int gammaLocation;
-  int contrastLocation;
-  int saturationLocation;
-  int offsetLocation;
-  int sharpenLocation;
-  int mvMatrixLocation;
+  GLint imageTextureLocation;
+  GLint videoTextureLocation;
+  GLint depthTextureLocation;
+  GLint mapTextureLocation;
+  GLint nearThresholdLocation;
+  GLint farThresholdLocation;
+  GLint gammaLocation;
+  GLint contrastLocation;
+  GLint saturationLocation;
+  GLint offsetLocation;
+  GLint sharpenLocation;
+  GLint mvMatrixLocation;
+  GLint haloLocation;
+  GLint haloRadiusLocation;
+  GLint renderForFBOLocation;
 
   QPoint lastMousePos;
   INT64 timestamp;
   bool firstPaintEventPending;
-  QRect viewport;
+  QMutex shaderMutex;
 };
 
 
@@ -178,6 +187,7 @@ void ThreeDWidget::makeShader(void)
 {
   Q_D(ThreeDWidget);
   qDebug() << "ThreeDWidget::makeShader()";
+
   SafeRenew(d->mixShaderProgram, new QGLShaderProgram);
   d->mixShaderProgram->addShaderFromSourceFile(QGLShader::Fragment, ":/shaders/mix.fs.glsl");
   d->mixShaderProgram->addShaderFromSourceFile(QGLShader::Vertex, ":/shaders/mix.vs.glsl");
@@ -187,10 +197,9 @@ void ThreeDWidget::makeShader(void)
   d->mixShaderProgram->enableAttributeArray(PROGRAM_TEXCOORD_ATTRIBUTE);
   d->mixShaderProgram->setAttributeArray(PROGRAM_TEXCOORD_ATTRIBUTE, TexCoords);
   d->mixShaderProgram->link();
-  d->mixShaderProgram->bind();
-
   qDebug() << "Shader linker says:" << d->mixShaderProgram->log();
   Q_ASSERT_X(d->mixShaderProgramIsValid(), "ThreeDWidget::makeShader()", "error in shader program");
+  d->mixShaderProgram->bind();
 
   d->videoTextureLocation = d->mixShaderProgram->uniformLocation("uVideoTexture");
   d->mixShaderProgram->setUniformValue(d->videoTextureLocation, 0);
@@ -204,14 +213,15 @@ void ThreeDWidget::makeShader(void)
   d->imageTextureLocation = d->mixShaderProgram->uniformLocation("uImageTexture");
   d->mixShaderProgram->setUniformValue(d->imageTextureLocation, 3);
 
-  qDebug() << "texture locations:" << d->videoTextureLocation << d->depthTextureLocation << d->mapTextureLocation << d->imageTextureLocation;
-
   d->gammaLocation = d->mixShaderProgram->uniformLocation("uGamma");
   d->contrastLocation = d->mixShaderProgram->uniformLocation("uContrast");
   d->saturationLocation = d->mixShaderProgram->uniformLocation("uSaturation");
   d->nearThresholdLocation = d->mixShaderProgram->uniformLocation("uNearThreshold");
   d->farThresholdLocation = d->mixShaderProgram->uniformLocation("uFarThreshold");
   d->mvMatrixLocation = d->mixShaderProgram->uniformLocation("uMatrix");
+  d->haloLocation = d->mixShaderProgram->uniformLocation("uHalo");
+  d->haloRadiusLocation = d->mixShaderProgram->uniformLocation("uHaloRadius");
+  d->renderForFBOLocation = d->mixShaderProgram->uniformLocation("uRenderForFBO");
 
   d->sharpenLocation = d->mixShaderProgram->uniformLocation("uSharpen");
   d->mixShaderProgram->setUniformValueArray(d->sharpenLocation, SharpeningKernel, 9, 1);
@@ -279,6 +289,7 @@ void ThreeDWidget::initializeGL(void)
 
   makeWorldMatrix();
   makeShader();
+  setHaloRadius(3);
 }
 
 
@@ -286,25 +297,13 @@ void ThreeDWidget::resizeGL(int width, int height)
 {
   Q_UNUSED(width);
   Q_UNUSED(height);
-  updateViewport(width, height);
-}
-
-
-void ThreeDWidget::updateViewport(int w, int h)
-{
-  Q_D(ThreeDWidget);
-  const QSizeF &glSize = d->zoom * QSizeF(ColorWidth, ColorHeight);
-  const QPoint &topLeft = QPoint(w - glSize.width(), h - glSize.height()) / 2;
-  d->viewport = QRect(topLeft, glSize.toSize());
-
+  // ...
 }
 
 
 void ThreeDWidget::paintGL(void)
 {
   Q_D(ThreeDWidget);
-
-  makeCurrent();
 
   if (d->firstPaintEventPending) {
     d->firstPaintEventPending = false;
@@ -335,7 +334,6 @@ void ThreeDWidget::paintGL(void)
 
   if (d->lastFrameFBO == nullptr || d->imageFBO == nullptr || d->mixShaderProgram == nullptr || d->timestamp == 0)
     return;
-
 
   d->mixShaderProgram->setAttributeArray(PROGRAM_VERTEX_ATTRIBUTE, Vertices);
   d->mixShaderProgram->setUniformValue(d->mvMatrixLocation, d->mvMatrix);
@@ -481,19 +479,36 @@ void ThreeDWidget::setGamma(GLfloat gamma)
 }
 
 
-void ThreeDWidget::setNearThreshold(GLuint nearThreshold)
+void ThreeDWidget::setNearThreshold(GLfloat nearThreshold)
 {
   Q_D(ThreeDWidget);
   makeCurrent();
-  d->mixShaderProgram->setUniformValue(d->nearThresholdLocation, (GLfloat)nearThreshold);
+  d->mixShaderProgram->setUniformValue(d->nearThresholdLocation, nearThreshold);
   updateGL();
 }
 
 
-void ThreeDWidget::setFarThreshold(GLuint farThreshold)
+void ThreeDWidget::setFarThreshold(GLfloat farThreshold)
 {
   Q_D(ThreeDWidget);
   makeCurrent();
-  d->mixShaderProgram->setUniformValue(d->farThresholdLocation, (GLfloat)farThreshold);
+  d->mixShaderProgram->setUniformValue(d->farThresholdLocation, farThreshold);
+  updateGL();
+}
+
+
+void ThreeDWidget::setHaloRadius(int radius)
+{
+  Q_D(ThreeDWidget);
+  d->haloRadius = radius;
+  const int haloArraySize = square(2 * d->haloRadius);
+  qDebug() << "ThreeDWidget::setHaloRadius(" << d->haloRadius << ")" << haloArraySize;
+  SafeRenewArray(d->halo, new QVector2D[haloArraySize]);
+  int i = 0;
+  for (int y = -d->haloRadius; y < d->haloRadius; ++y)
+    for (int x = -d->haloRadius; x < d->haloRadius; ++x)
+      d->halo[i++] = QVector2D(qreal(x) / DepthWidth, qreal(y) / DepthHeight);
+  d->mixShaderProgram->setUniformValueArray(d->haloLocation, d->halo, haloArraySize);
+  d->mixShaderProgram->setUniformValue(d->haloRadiusLocation, d->haloRadius);
   updateGL();
 }

@@ -20,7 +20,6 @@
 #include <Kinect.h>
 
 #include <QDebug>
-#include <QElapsedTimer>
 #include <QBoxLayout>
 
 #include "globals.h"
@@ -46,7 +45,7 @@ public:
     , videoWidget(nullptr)
     , rgbdWidget(nullptr)
     , threeDWidget(nullptr)
-    , colorBuffer(new RGBQUAD[ColorWidth * ColorHeight])
+    , colorBuffer(new RGBQUAD[ColorSize])
   {
     Q_UNUSED(parent);
     // ...
@@ -63,7 +62,6 @@ public:
   IDepthFrameReader *depthFrameReader;
   IColorFrameReader *colorFrameReader;
   IInfraredFrameReader *irFrameReader;
-  QElapsedTimer timer;
 
   DepthWidget *depthWidget;
   VideoWidget *videoWidget;
@@ -101,6 +99,8 @@ MainWindow::MainWindow(QWidget *parent)
 
   ui->gridLayout->addLayout(vbox, 0, 0);
 
+  QObject::connect(d->threeDWidget, SIGNAL(ready()), SLOT(initAfterGL()));
+
   QObject::connect(ui->gammaDoubleSpinBox, SIGNAL(valueChanged(double)), SLOT(gammaChanged(double)));
   QObject::connect(ui->contrastDoubleSpinBox, SIGNAL(valueChanged(double)), SLOT(contrastChanged(double)));
   QObject::connect(ui->saturationDoubleSpinBox, SIGNAL(valueChanged(double)), SLOT(saturationChanged(double)));
@@ -108,10 +108,9 @@ MainWindow::MainWindow(QWidget *parent)
   QObject::connect(ui->actionExit, SIGNAL(triggered(bool)),SLOT(close()));
   QObject::connect(ui->farVerticalSlider, SIGNAL(valueChanged(int)), SLOT(setFarThreshold(int)));
   QObject::connect(ui->nearVerticalSlider, SIGNAL(valueChanged(int)), SLOT(setNearThreshold(int)));
+  QObject::connect(ui->haloRadiusVerticalSlider, SIGNAL(valueChanged(int)), d->threeDWidget, SLOT(setHaloRadius(int)));
 
-  QObject::connect(d->threeDWidget, SIGNAL(ready()), SLOT(initAfterGL()));
-
-  showMaximized();
+//  showMaximized();
 }
 
 
@@ -123,16 +122,16 @@ MainWindow::~MainWindow()
 
 void MainWindow::initAfterGL(void)
 {
-  Q_D(MainWindow);
+  // Q_D(MainWindow);
   qDebug() << "MainWindow::initAfterGL()";
   ui->actionMapFromColorToDepth->setChecked(true);
   ui->actionMatchColorAndDepthSpace->setChecked(true);
+  ui->haloRadiusVerticalSlider->setValue(10);
   ui->nearVerticalSlider->setValue(1564);
   ui->farVerticalSlider->setValue(1954);
   ui->saturationDoubleSpinBox->setValue(1.3);
   ui->gammaDoubleSpinBox->setValue(1.4);
   ui->contrastDoubleSpinBox->setValue(1.1);
-  d->timer.start();
   startTimer(1000 / 25, Qt::PreciseTimer);
 }
 
@@ -269,21 +268,21 @@ bool MainWindow::initKinect(void)
 void MainWindow::contrastChanged(double contrast)
 {
   Q_D(MainWindow);
-  d->threeDWidget->setContrast((GLfloat)contrast);
+  d->threeDWidget->setContrast(GLfloat(contrast));
 }
 
 
 void MainWindow::gammaChanged(double gamma)
 {
   Q_D(MainWindow);
-  d->threeDWidget->setGamma((GLfloat)gamma);
+  d->threeDWidget->setGamma(GLfloat(gamma));
 }
 
 
 void MainWindow::saturationChanged(double saturation)
 {
   Q_D(MainWindow);
-  d->threeDWidget->setSaturation((GLfloat)saturation);
+  d->threeDWidget->setSaturation(GLfloat(saturation));
 }
 
 
@@ -292,7 +291,7 @@ void MainWindow::setNearThreshold(int value)
   Q_D(MainWindow);
   if (value < ui->farVerticalSlider->value()) {
     d->rgbdWidget->setNearThreshold(value);
-    d->threeDWidget->setNearThreshold((GLuint)value);
+    d->threeDWidget->setNearThreshold(GLfloat(value));
   }
   else {
     ui->farVerticalSlider->setValue(value);
@@ -305,10 +304,9 @@ void MainWindow::setFarThreshold(int value)
   Q_D(MainWindow);
   if (value > ui->nearVerticalSlider->value()) {
     d->rgbdWidget->setFarThreshold(value);
-    d->threeDWidget->setFarThreshold((GLuint)value);
+    d->threeDWidget->setFarThreshold(GLfloat(value));
   }
   else {
     ui->nearVerticalSlider->setValue(value);
   }
 }
-
