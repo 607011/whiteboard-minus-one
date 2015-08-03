@@ -15,7 +15,7 @@ uniform float uSaturation;
 uniform float uSharpen[9];
 uniform vec2 uOffset[9];
 uniform vec2 uHalo[1024];
-uniform int uHaloRadius;
+uniform int uHaloSize;
 uniform float uFarThreshold;
 uniform float uNearThreshold;
 uniform bool uRenderForFBO;
@@ -23,10 +23,10 @@ uniform bool uRenderForFBO;
 const ivec2 iDepthSize = ivec2(512, 424);
 const vec2 fDepthSize = vec2(iDepthSize);
 
+const float MaxDepth = 6500.0;
 
 bool allDepthsValidWithinHalo(vec2 coord) {
-  int N = 2 * 2 * uHaloRadius * uHaloRadius;
-  for (int i = 0; i < N; ++i) {
+  for (int i = 0; i < uHaloSize; ++i) {
     float depth = float(texture2D(uDepthTexture, coord + uHalo[i]).r);
     if (depth < uNearThreshold || depth > uFarThreshold)
       return false;

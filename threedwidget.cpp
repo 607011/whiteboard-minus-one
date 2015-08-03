@@ -85,8 +85,7 @@ public:
     , depthSpaceDataInteger(new DSP[ColorSize])
     , timestamp(0)
     , firstPaintEventPending(true)
-    , haloRadius(0)
-    , halo(nullptr)
+    , haloSize(0)
   {
   }
   ~ThreeDWidgetPrivate()
@@ -113,8 +112,9 @@ public:
   QGLFramebufferObject *imageFBO;
   QGLShaderProgram *mixShaderProgram;
 
-  int haloRadius;
-  QVector2D *halo;
+  static const int MaxHaloSize = 2 * 16 * 2 * 16;
+  int haloSize;
+  QVector2D halo[MaxHaloSize];
 
   IKinectSensor *kinectSensor;
   ICoordinateMapper *coordinateMapper;
@@ -136,14 +136,12 @@ public:
   GLint saturationLocation;
   GLint mvMatrixLocation;
   GLint haloLocation;
-  GLint haloRadiusLocation;
+  GLint haloSizeLocation;
 
   QPoint lastMousePos;
   INT64 timestamp;
   bool firstPaintEventPending;
-  QMutex shaderMutex;
-
-  GLfloat sharpeningKernel[9];
+  // QMutex mutex;
 };
 
 
@@ -209,7 +207,7 @@ void ThreeDWidget::makeShader(void)
   d->farThresholdLocation = d->mixShaderProgram->uniformLocation("uFarThreshold");
   d->mvMatrixLocation = d->mixShaderProgram->uniformLocation("uMatrix");
   d->haloLocation = d->mixShaderProgram->uniformLocation("uHalo");
-  d->haloRadiusLocation = d->mixShaderProgram->uniformLocation("uHaloRadius");
+  d->haloSizeLocation = d->mixShaderProgram->uniformLocation("uHaloSize");
 }
 
 
@@ -478,18 +476,19 @@ void ThreeDWidget::setFarThreshold(GLfloat farThreshold)
 }
 
 
-void ThreeDWidget::setHaloRadius(int radius)
+void ThreeDWidget::setHaloRadius(int r)
 {
   Q_D(ThreeDWidget);
-  d->haloRadius = radius;
-  const int haloArraySize = square(2 * d->haloRadius);
-  SafeRenewArray(d->halo, new QVector2D[haloArraySize]);
-  int i = 0;
-  for (int y = -d->haloRadius; y < d->haloRadius; ++y)
-    for (int x = -d->haloRadius; x < d->haloRadius; ++x)
-      d->halo[i++] = QVector2D(qreal(x) / DepthWidth, qreal(y) / DepthHeight);
-  d->mixShaderProgram->setUniformValueArray(d->haloLocation, d->halo, haloArraySize);
-  d->mixShaderProgram->setUniformValue(d->haloRadiusLocation, d->haloRadius);
+  d->haloSize = 0;
+  const int x0 = -(3 * r / 2);
+  const int x1 = x0 + 2 * r;
+  const int y0 = -(2 * r / 3);
+  const int y1 =   2 * r / 3;
+  for (int y = y0; y < y1; ++y)
+    for (int x = x0; x < x1; ++x)
+      d->halo[d->haloSize++] = QVector2D(qreal(x) / DepthWidth, qreal(y) / DepthHeight);
+  d->mixShaderProgram->setUniformValueArray(d->haloLocation, d->halo, d->haloSize);
+  d->mixShaderProgram->setUniformValue(d->haloSizeLocation, d->haloSize);
   updateGL();
 }
 
