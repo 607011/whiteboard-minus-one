@@ -34,17 +34,19 @@
 
 #include <Kinect.h>
 
+static const int PROGRAM_VERTEX_ATTRIBUTE = 0;
+static const int PROGRAM_TEXCOORD_ATTRIBUTE = 1;
 static const QVector3D Vertices[4] = {
-  QVector3D(-1.920f, -1.080f, 0.f),
-  QVector3D(-1.920f,  1.080f, 0.f),
-  QVector3D( 1.920f, -1.080f, 0.f),
-  QVector3D( 1.920f,  1.080f, 0.f)
+  QVector3D(+1.920f, +1.080f, 0.f),
+  QVector3D(+1.920f, -1.080f, 0.f),
+  QVector3D(-1.920f, +1.080f, 0.f),
+  QVector3D(-1.920f, -1.080f, 0.f)
 };
 static const QVector3D Vertices4FBO[4] = {
   QVector3D(-1.f, -1.f, 0.f),
-  QVector3D(-1.f,  1.f, 0.f),
-  QVector3D( 1.f, -1.f, 0.f),
-  QVector3D( 1.f,  1.f, 0.f)
+  QVector3D(-1.f, +1.f, 0.f),
+  QVector3D(+1.f, -1.f, 0.f),
+  QVector3D(+1.f, +1.f, 0.f)
 };
 static const QVector2D TexCoords[4] = {
   QVector2D(0, 0),
@@ -52,13 +54,7 @@ static const QVector2D TexCoords[4] = {
   QVector2D(1, 0),
   QVector2D(1, 1)
 };
-static const QVector2D TexCoords4FBO[4] = {
-  QVector2D(1, 1),
-  QVector2D(1, 0),
-  QVector2D(0, 1),
-  QVector2D(0, 0)
-};
-static const QVector2D Offset[9] = {
+static const QVector2D SharpeningFilterOffset[9] = {
   QVector2D(1,  1), QVector2D(0 , 1), QVector2D(-1,  1),
   QVector2D(1,  0), QVector2D(0,  0), QVector2D(-1,  0),
   QVector2D(1, -1), QVector2D(0, -1), QVector2D(-1, -1)
@@ -68,8 +64,6 @@ static GLfloat SharpeningKernel[9] = {
   -.5f, 2.f, -.5f,
   0.f, -.5f,  0.f
 };
-static const int PROGRAM_VERTEX_ATTRIBUTE = 0;
-static const int PROGRAM_TEXCOORD_ATTRIBUTE = 1;
 
 struct DSP {
   DSP(void)
@@ -77,18 +71,18 @@ struct DSP {
     , y(0)
   { /* ... */ }
   DSP(const DepthSpacePoint *dsp)
-    : x((dsp->X == -std::numeric_limits<float>::infinity()) ? -1 : INT32(dsp->X))
-    , y((dsp->Y == -std::numeric_limits<float>::infinity()) ? -1 : INT32(dsp->Y))
+    : x((dsp->X == -std::numeric_limits<float>::infinity()) ? -1 : INT16(dsp->X))
+    , y((dsp->Y == -std::numeric_limits<float>::infinity()) ? -1 : INT16(dsp->Y))
   { /* ... */ }
-  UINT32 x;
-  UINT32 y;
+  INT16 x;
+  INT16 y;
 };
 
 class ThreeDWidgetPrivate {
 public:
   ThreeDWidgetPrivate(void)
-    : xRot(180.f)
-    , yRot(180.f)
+    : xRot(0.f)
+    , yRot(0.f)
     , xTrans(0.f)
     , yTrans(0.f)
     , zoom(-2.77f)
@@ -147,7 +141,6 @@ public:
   int offsetLocation;
   int sharpenLocation;
   int mvMatrixLocation;
-  int renderForFBOLocation;
 
   QPoint lastMousePos;
   INT64 timestamp;
@@ -219,12 +212,11 @@ void ThreeDWidget::makeShader(void)
   d->nearThresholdLocation = d->mixShaderProgram->uniformLocation("uNearThreshold");
   d->farThresholdLocation = d->mixShaderProgram->uniformLocation("uFarThreshold");
   d->mvMatrixLocation = d->mixShaderProgram->uniformLocation("uMatrix");
-  d->renderForFBOLocation = d->mixShaderProgram->uniformLocation("uRenderForFBO");
 
   d->sharpenLocation = d->mixShaderProgram->uniformLocation("uSharpen");
   d->mixShaderProgram->setUniformValueArray(d->sharpenLocation, SharpeningKernel, 9, 1);
   d->offsetLocation = d->mixShaderProgram->uniformLocation("uOffset");
-  d->mixShaderProgram->setUniformValueArray(d->offsetLocation, Offset, 9);
+  d->mixShaderProgram->setUniformValueArray(d->offsetLocation, SharpeningFilterOffset, 9);
 }
 
 
@@ -347,7 +339,6 @@ void ThreeDWidget::paintGL(void)
 
   d->mixShaderProgram->setAttributeArray(PROGRAM_VERTEX_ATTRIBUTE, Vertices);
   d->mixShaderProgram->setUniformValue(d->mvMatrixLocation, d->mvMatrix);
-  d->mixShaderProgram->setUniformValue(d->renderForFBOLocation, false);
   glClearColor(.15f, .15f, .15f, 1.f);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glViewport(0, 0, width(), height());
@@ -356,7 +347,6 @@ void ThreeDWidget::paintGL(void)
   d->imageFBO->bind();
   d->mixShaderProgram->setAttributeArray(PROGRAM_VERTEX_ATTRIBUTE, Vertices4FBO);
   d->mixShaderProgram->setUniformValue(d->mvMatrixLocation, QMatrix4x4());
-  d->mixShaderProgram->setUniformValue(d->renderForFBOLocation, true);
   glClearColor(.6784f, 1.f, .1874f, 1.f);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glViewport(0, 0, d->imageFBO->width(), d->imageFBO->height());
@@ -365,7 +355,7 @@ void ThreeDWidget::paintGL(void)
   glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 0, 0, d->imageFBO->width(), d->imageFBO->height(), 0);
   d->imageFBO->release();
 
-  d->lastFrameFBO->toImage().save(QString("images/lastFrameFBO-%1.jpg").arg(d->timestamp, 14, 10, QChar('0')), "JPG", 30);
+  // d->lastFrameFBO->toImage().save(QString("images/lastFrameFBO-%1.jpg").arg(d->timestamp, 14, 10, QChar('0')), "JPG", 30);
 }
 
 
@@ -402,7 +392,7 @@ void ThreeDWidget::process(INT64 nTime, const uchar *pRGB, const UINT16 *pDepth,
 
   glActiveTexture(GL_TEXTURE2);
   glBindTexture(GL_TEXTURE_2D, d->mapTextureHandle);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RG32I, ColorWidth, ColorHeight, 0, GL_RG_INTEGER, GL_INT, d->depthSpaceDataInteger);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RG16I, ColorWidth, ColorHeight, 0, GL_RG_INTEGER, GL_UNSIGNED_SHORT, d->depthSpaceDataInteger);
   Q_ASSERT_X(glGetError() == GL_NO_ERROR, "ThreeDWidget::process()", "glTexImage2D() failed");
 
   glActiveTexture(GL_TEXTURE3);

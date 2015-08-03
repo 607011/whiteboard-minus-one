@@ -16,11 +16,10 @@ uniform float uSharpen[9];
 uniform vec2 uOffset[9];
 uniform float uFarThreshold;
 uniform float uNearThreshold;
-uniform bool uRenderForFBO;
 
 const ivec2 iDepthSize = ivec2(512, 424);
 const vec2 fDepthSize = vec2(iDepthSize);
-//const vec2 fColorSize = vec2(1920.0, 1080.0);
+const vec2 fColorSize = vec2(1920.0, 1080.0);
 
 void main(void)
 {
@@ -32,20 +31,19 @@ void main(void)
   float depth = float(texture2D(uDepthTexture, coord).r);
   if (depth > uNearThreshold && depth < uFarThreshold) {
     color = texture2D(uVideoTexture, vTexCoord).rgb;
-    if (!uRenderForFBO) {
-      // for (int i = 0; i < 9; ++i) {
-      //   vec3 c = texture2D(uVideoTexture, vTexCoord + uOffset[i] / fColorSize).rgb;
-      //   color += c * uSharpen[i];
-      // }
-      color = pow(color, vec3(1.0 / uGamma));
-      float luminance = dot(color, vec3(0.2126, 0.7152, 0.0722));
-      vec3 gray = vec3(luminance);
-      color = mix(gray, color, uSaturation);
-      color = (color - 0.5) * uContrast + 0.5;
+    for (int i = 0; i < 9; ++i) {
+      vec3 c = texture2D(uVideoTexture, vTexCoord + uOffset[i] / fColorSize).rgb;
+      color += c * uSharpen[i];
     }
+    color = pow(color, vec3(1.0 / uGamma));
+    float luminance = dot(color, vec3(0.2126, 0.7152, 0.0722));
+    vec3 gray = vec3(luminance);
+    color = mix(gray, color, uSaturation);
+    color = (color - 0.5) * uContrast + 0.5;
   }
   else if (depth == 0.0) {
     color = vec3(0.7, 1.0, 0.3);
+    discard;
   }
   else {
     color = texture2D(uImageTexture, vTexCoord).rgb;
