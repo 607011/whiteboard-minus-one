@@ -87,6 +87,9 @@
         </property>
         <item>
          <widget class="QSlider" name="nearVerticalSlider">
+          <property name="toolTip">
+           <string>Near threshold</string>
+          </property>
           <property name="minimum">
            <number>500</number>
           </property>
@@ -107,11 +110,17 @@
           </property>
           <property name="tickPosition">
            <enum>QSlider::TicksAbove</enum>
+          </property>
+          <property name="tickInterval">
+           <number>1000</number>
           </property>
          </widget>
         </item>
         <item>
          <widget class="QSlider" name="farVerticalSlider">
+          <property name="toolTip">
+           <string>Far threshold</string>
+          </property>
           <property name="minimum">
            <number>500</number>
           </property>
@@ -132,26 +141,39 @@
           </property>
           <property name="tickPosition">
            <enum>QSlider::TicksAbove</enum>
+          </property>
+          <property name="tickInterval">
+           <number>1000</number>
           </property>
          </widget>
         </item>
        </layout>
       </item>
       <item>
-       <widget class="QSlider" name="haloRadiusVerticalSlider">
-        <property name="minimum">
-         <number>1</number>
+       <layout class="QHBoxLayout" name="horizontalLayout_2">
+        <property name="topMargin">
+         <number>6</number>
         </property>
-        <property name="maximum">
-         <number>16</number>
-        </property>
-        <property name="orientation">
-         <enum>Qt::Vertical</enum>
-        </property>
-        <property name="tickPosition">
-         <enum>QSlider::TicksBothSides</enum>
-        </property>
-       </widget>
+        <item>
+         <widget class="QSlider" name="haloRadiusVerticalSlider">
+          <property name="toolTip">
+           <string>Halo</string>
+          </property>
+          <property name="minimum">
+           <number>1</number>
+          </property>
+          <property name="maximum">
+           <number>16</number>
+          </property>
+          <property name="orientation">
+           <enum>Qt::Vertical</enum>
+          </property>
+          <property name="tickPosition">
+           <enum>QSlider::NoTicks</enum>
+          </property>
+         </widget>
+        </item>
+       </layout>
       </item>
       <item>
        <spacer name="verticalSpacer">

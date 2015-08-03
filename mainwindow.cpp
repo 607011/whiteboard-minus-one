@@ -110,7 +110,7 @@ MainWindow::MainWindow(QWidget *parent)
   QObject::connect(ui->nearVerticalSlider, SIGNAL(valueChanged(int)), SLOT(setNearThreshold(int)));
   QObject::connect(ui->haloRadiusVerticalSlider, SIGNAL(valueChanged(int)), d->threeDWidget, SLOT(setHaloRadius(int)));
 
-//  showMaximized();
+  showMaximized();
 }
 
 

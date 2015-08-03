@@ -39,22 +39,18 @@ bool allDepthsValidWithinHalo(vec2 coord) {
 
 void main(void)
 {
-  vec3 color = texture2D(uVideoTexture, vTexCoord).rgb;
+  vec3 color = vec3(0.0);
   ivec2 dsp = texture2D(uMapTexture, vTexCoord).xy;
-  if (dsp.x < 0 || dsp.y < 0 || dsp.x > iDepthSize.x || dsp.y > iDepthSize.y)
-    discard;
   vec2 coord = vec2(dsp) / fDepthSize;
-  float depth = float(texture2D(uDepthTexture, coord).r);
-  if (allDepthsValidWithinHalo(coord)) {
+  if (dsp.x >= 0 && dsp.y >= 0 && dsp.x < iDepthSize.x && dsp.y < iDepthSize.y && allDepthsValidWithinHalo(coord)) {
     color = texture2D(uVideoTexture, vTexCoord).rgb;
-    for (int i = 0; i < 9; ++i) {
-      vec3 c = texture2D(uVideoTexture, vTexCoord + uOffset[i] / fColorSize).rgb;
-      color += c * uSharpen[i];
-    }
+    // gamma correction
     color = pow(color, vec3(1.0 / uGamma));
+    // saturation
     float luminance = dot(color, vec3(0.2126, 0.7152, 0.0722));
     vec3 gray = vec3(luminance);
     color = mix(gray, color, uSaturation);
+    // contrast
     color = (color - 0.5) * uContrast + 0.5;
   }
   else {

@@ -55,16 +55,7 @@ static const QVector2D TexCoords[4] = {
   QVector2D(1, 0),
   QVector2D(1, 1)
 };
-static const QVector2D SharpeningFilterOffset[9] = {
-  QVector2D(1,  1), QVector2D(0 , 1), QVector2D(-1,  1),
-  QVector2D(1,  0), QVector2D(0,  0), QVector2D(-1,  0),
-  QVector2D(1, -1), QVector2D(0, -1), QVector2D(-1, -1)
-};
-static GLfloat SharpeningKernel[9] = {
-  0.f, -.5f,  0.f,
-  -.5f, 2.f, -.5f,
-  0.f, -.5f,  0.f
-};
+
 
 struct DSP {
   DSP(void)
@@ -97,7 +88,6 @@ public:
     , haloRadius(0)
     , halo(nullptr)
   {
-    // ...
   }
   ~ThreeDWidgetPrivate()
   {
@@ -144,17 +134,16 @@ public:
   GLint gammaLocation;
   GLint contrastLocation;
   GLint saturationLocation;
-  GLint offsetLocation;
-  GLint sharpenLocation;
   GLint mvMatrixLocation;
   GLint haloLocation;
   GLint haloRadiusLocation;
-  GLint renderForFBOLocation;
 
   QPoint lastMousePos;
   INT64 timestamp;
   bool firstPaintEventPending;
   QMutex shaderMutex;
+
+  GLfloat sharpeningKernel[9];
 };
 
 
@@ -221,12 +210,6 @@ void ThreeDWidget::makeShader(void)
   d->mvMatrixLocation = d->mixShaderProgram->uniformLocation("uMatrix");
   d->haloLocation = d->mixShaderProgram->uniformLocation("uHalo");
   d->haloRadiusLocation = d->mixShaderProgram->uniformLocation("uHaloRadius");
-  d->renderForFBOLocation = d->mixShaderProgram->uniformLocation("uRenderForFBO");
-
-  d->sharpenLocation = d->mixShaderProgram->uniformLocation("uSharpen");
-  d->mixShaderProgram->setUniformValueArray(d->sharpenLocation, SharpeningKernel, 9, 1);
-  d->offsetLocation = d->mixShaderProgram->uniformLocation("uOffset");
-  d->mixShaderProgram->setUniformValueArray(d->offsetLocation, SharpeningFilterOffset, 9);
 }
 
 
@@ -345,8 +328,6 @@ void ThreeDWidget::paintGL(void)
   d->imageFBO->bind();
   d->mixShaderProgram->setAttributeArray(PROGRAM_VERTEX_ATTRIBUTE, Vertices4FBO);
   d->mixShaderProgram->setUniformValue(d->mvMatrixLocation, QMatrix4x4());
-//  glClearColor(.6784f, 1.f, .1874f, 1.f);
-//  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glViewport(0, 0, d->imageFBO->width(), d->imageFBO->height());
   glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
   glActiveTexture(GL_TEXTURE3);
@@ -502,7 +483,6 @@ void ThreeDWidget::setHaloRadius(int radius)
   Q_D(ThreeDWidget);
   d->haloRadius = radius;
   const int haloArraySize = square(2 * d->haloRadius);
-  qDebug() << "ThreeDWidget::setHaloRadius(" << d->haloRadius << ")" << haloArraySize;
   SafeRenewArray(d->halo, new QVector2D[haloArraySize]);
   int i = 0;
   for (int y = -d->haloRadius; y < d->haloRadius; ++y)
@@ -512,3 +492,5 @@ void ThreeDWidget::setHaloRadius(int radius)
   d->mixShaderProgram->setUniformValue(d->haloRadiusLocation, d->haloRadius);
   updateGL();
 }
+
+
