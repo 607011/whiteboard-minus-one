@@ -491,5 +491,3 @@ void ThreeDWidget::setHaloRadius(int r)
   d->mixShaderProgram->setUniformValue(d->haloSizeLocation, d->haloSize);
   updateGL();
 }
-
-
