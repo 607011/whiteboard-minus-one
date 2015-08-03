@@ -22,8 +22,6 @@ uniform bool uRenderForFBO;
 
 const ivec2 iDepthSize = ivec2(512, 424);
 const vec2 fDepthSize = vec2(iDepthSize);
-const ivec2 iColorSize = ivec2(1920, 1080);
-const vec2 fColorSize = vec2(iColorSize);
 
 
 bool allDepthsValidWithinHalo(vec2 coord) {
