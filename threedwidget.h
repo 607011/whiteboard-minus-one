@@ -73,6 +73,7 @@ private:
 
   void makeShader(void);
   void makeWorldMatrix(void);
+  void updateViewport(int width, int height);
 };
 
 

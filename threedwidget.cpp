@@ -30,27 +30,33 @@
 #include <QVector2D>
 #include <QVector3D>
 #include <QMutexLocker>
+#include <QImage>
 
 #include <Kinect.h>
 
 static const QVector3D Vertices[4] = {
-  QVector3D(-1.92f, -1.08f, 0.f),
-  QVector3D(-1.92f,  1.08f, 0.f),
-  QVector3D( 1.92f, -1.08f, 0.f),
-  QVector3D( 1.92f,  1.08f, 0.f)
+  QVector3D(-1.920f, -1.080f, 0.f),
+  QVector3D(-1.920f,  1.080f, 0.f),
+  QVector3D( 1.920f, -1.080f, 0.f),
+  QVector3D( 1.920f,  1.080f, 0.f)
 };
-static const QVector2D TexCoords4FBO[4] =
-{
-  QVector2D(1, 1),
-  QVector2D(1, 0),
-  QVector2D(0, 1),
-  QVector2D(0, 0)
+static const QVector3D Vertices4FBO[4] = {
+  QVector3D(-1.f, -1.f, 0.f),
+  QVector3D(-1.f,  1.f, 0.f),
+  QVector3D( 1.f, -1.f, 0.f),
+  QVector3D( 1.f,  1.f, 0.f)
 };
 static const QVector2D TexCoords[4] = {
   QVector2D(0, 0),
   QVector2D(0, 1),
   QVector2D(1, 0),
   QVector2D(1, 1)
+};
+static const QVector2D TexCoords4FBO[4] = {
+  QVector2D(1, 1),
+  QVector2D(1, 0),
+  QVector2D(0, 1),
+  QVector2D(0, 0)
 };
 static const QVector2D Offset[9] = {
   QVector2D(1,  1), QVector2D(0 , 1), QVector2D(-1,  1),
@@ -59,7 +65,7 @@ static const QVector2D Offset[9] = {
 };
 static GLfloat SharpeningKernel[9] = {
   0.f, -.5f,  0.f,
-  -.5f, 3.f, -.5f,
+  -.5f, 2.f, -.5f,
   0.f, -.5f,  0.f
 };
 static const int PROGRAM_VERTEX_ATTRIBUTE = 0;
@@ -146,6 +152,7 @@ public:
   QPoint lastMousePos;
   INT64 timestamp;
   bool firstPaintEventPending;
+  QRect viewport;
 };
 
 
@@ -185,7 +192,6 @@ void ThreeDWidget::makeShader(void)
   d->mixShaderProgram->bindAttributeLocation("aTexCoord", PROGRAM_TEXCOORD_ATTRIBUTE);
   d->mixShaderProgram->enableAttributeArray(PROGRAM_VERTEX_ATTRIBUTE);
   d->mixShaderProgram->enableAttributeArray(PROGRAM_TEXCOORD_ATTRIBUTE);
-  d->mixShaderProgram->setAttributeArray(PROGRAM_VERTEX_ATTRIBUTE, Vertices);
   d->mixShaderProgram->setAttributeArray(PROGRAM_TEXCOORD_ATTRIBUTE, TexCoords);
   d->mixShaderProgram->link();
   d->mixShaderProgram->bind();
@@ -288,7 +294,17 @@ void ThreeDWidget::resizeGL(int width, int height)
 {
   Q_UNUSED(width);
   Q_UNUSED(height);
-  qDebug() << "ThreeDWidget::resizeGL(" << width << "," << height << ")";
+  updateViewport(width, height);
+}
+
+
+void ThreeDWidget::updateViewport(int w, int h)
+{
+  Q_D(ThreeDWidget);
+  const QSizeF &glSize = d->zoom * QSizeF(ColorWidth, ColorHeight);
+  const QPoint &topLeft = QPoint(w - glSize.width(), h - glSize.height()) / 2;
+  d->viewport = QRect(topLeft, glSize.toSize());
+
 }
 
 
@@ -328,7 +344,8 @@ void ThreeDWidget::paintGL(void)
   if (d->lastFrameFBO == nullptr || d->imageFBO == nullptr || d->mixShaderProgram == nullptr || d->timestamp == 0)
     return;
 
-  //  d->mixShaderProgram->setAttributeArray(PROGRAM_TEXCOORD_ATTRIBUTE, TexCoords);
+
+  d->mixShaderProgram->setAttributeArray(PROGRAM_VERTEX_ATTRIBUTE, Vertices);
   d->mixShaderProgram->setUniformValue(d->mvMatrixLocation, d->mvMatrix);
   d->mixShaderProgram->setUniformValue(d->renderForFBOLocation, false);
   glClearColor(.15f, .15f, .15f, 1.f);
@@ -337,7 +354,7 @@ void ThreeDWidget::paintGL(void)
   glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
   d->imageFBO->bind();
-  //  d->mixShaderProgram->setAttributeArray(PROGRAM_TEXCOORD_ATTRIBUTE, TexCoords);
+  d->mixShaderProgram->setAttributeArray(PROGRAM_VERTEX_ATTRIBUTE, Vertices4FBO);
   d->mixShaderProgram->setUniformValue(d->mvMatrixLocation, QMatrix4x4());
   d->mixShaderProgram->setUniformValue(d->renderForFBOLocation, true);
   glClearColor(.6784f, 1.f, .1874f, 1.f);
@@ -348,7 +365,7 @@ void ThreeDWidget::paintGL(void)
   glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 0, 0, d->imageFBO->width(), d->imageFBO->height(), 0);
   d->imageFBO->release();
 
-  // d->lastFrameFBO->toImage().save(QString("images/%1.jpg").arg(d->timestamp, 14, 10, QChar('0')), "JPG", 30);
+  d->lastFrameFBO->toImage().save(QString("images/lastFrameFBO-%1.jpg").arg(d->timestamp, 14, 10, QChar('0')), "JPG", 30);
 }
 
 
@@ -375,6 +392,8 @@ void ThreeDWidget::process(INT64 nTime, const uchar *pRGB, const UINT16 *pDepth,
   glBindTexture(GL_TEXTURE_2D, d->videoTextureHandle);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ColorWidth, ColorHeight, 0, GL_BGRA, GL_UNSIGNED_BYTE, pRGB);
   Q_ASSERT_X(glGetError() == GL_NO_ERROR, "ThreeDWidget::process()", "glTexImage2D() failed");
+
+  // QImage(pRGB, ColorWidth, ColorHeight, QImage::Format_ARGB32).save(QString("images/RGB-%1.jpg").arg(d->timestamp, 14, 10, QChar('0')), "JPG", 30);
 
   glActiveTexture(GL_TEXTURE1);
   glBindTexture(GL_TEXTURE_2D, d->depthTextureHandle);
