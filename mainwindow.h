@@ -23,6 +23,8 @@
 #include <QMainWindow>
 #include <QScopedPointer>
 #include <QTimerEvent>
+#include <QVector>
+#include <QVector3D>
 
 namespace Ui {
 class MainWindow;

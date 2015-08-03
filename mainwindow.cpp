@@ -104,13 +104,13 @@ MainWindow::MainWindow(QWidget *parent)
   QObject::connect(ui->gammaDoubleSpinBox, SIGNAL(valueChanged(double)), SLOT(gammaChanged(double)));
   QObject::connect(ui->contrastDoubleSpinBox, SIGNAL(valueChanged(double)), SLOT(contrastChanged(double)));
   QObject::connect(ui->saturationDoubleSpinBox, SIGNAL(valueChanged(double)), SLOT(saturationChanged(double)));
-  QObject::connect(ui->actionMapFromColorToDepth, SIGNAL(toggled(bool)), d->rgbdWidget, SLOT(setMapFromColorToDepth(bool)));
   QObject::connect(ui->actionExit, SIGNAL(triggered(bool)),SLOT(close()));
   QObject::connect(ui->farVerticalSlider, SIGNAL(valueChanged(int)), SLOT(setFarThreshold(int)));
   QObject::connect(ui->nearVerticalSlider, SIGNAL(valueChanged(int)), SLOT(setNearThreshold(int)));
   QObject::connect(ui->haloRadiusVerticalSlider, SIGNAL(valueChanged(int)), d->threeDWidget, SLOT(setHaloRadius(int)));
+  QObject::connect(d->rgbdWidget, SIGNAL(refPointsSet(QVector<QVector3D>)), d->threeDWidget, SLOT(setRefPoints(QVector<QVector3D>)));
 
-  showMaximized();
+  // showMaximized();
 }
 
 

@@ -204,12 +204,6 @@
      <height>21</height>
     </rect>
    </property>
-   <widget class="QMenu" name="menuExtras">
-    <property name="title">
-     <string>Options</string>
-    </property>
-    <addaction name="actionMapFromColorToDepth"/>
-   </widget>
    <widget class="QMenu" name="menuFile">
     <property name="title">
      <string>File</string>
@@ -217,7 +211,6 @@
     <addaction name="actionExit"/>
    </widget>
    <addaction name="menuFile"/>
-   <addaction name="menuExtras"/>
   </widget>
   <widget class="QToolBar" name="mainToolBar">
    <attribute name="toolBarArea">

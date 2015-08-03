@@ -25,6 +25,8 @@
 #include <QOpenGLFunctions>
 #include <QMouseEvent>
 #include <QWheelEvent>
+#include <QVector>
+#include <QVector3D>
 
 #include <Kinect.h>
 
@@ -54,6 +56,7 @@ public:
 
 public slots:
   void setHaloRadius(int);
+  void setRefPoints(const QVector<QVector3D> &);
 
 signals:
   void ready(void);

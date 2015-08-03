@@ -25,6 +25,9 @@
 #include <QWidget>
 #include <QPaintEvent>
 #include <QResizeEvent>
+#include <QMouseEvent>
+#include <QVector>
+#include <QVector3D>
 #include <QScopedPointer>
 
 class RGBDWidgetPrivate;
@@ -40,13 +43,14 @@ public:
   void setFarThreshold(int);
 
 public slots:
-  void setMapFromColorToDepth(bool depthToColorFrameMappingEnabled);
 
 signals:
+  void refPointsSet(QVector<QVector3D>);
 
 protected:
   void resizeEvent(QResizeEvent*);
   void paintEvent(QPaintEvent*);
+  void mousePressEvent(QMouseEvent*);
 
 private:
   QScopedPointer<RGBDWidgetPrivate> d_ptr;

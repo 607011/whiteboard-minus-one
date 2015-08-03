@@ -22,6 +22,7 @@
 
 #include <limits>
 
+#include <QtMath>
 #include <QDebug>
 #include <QString>
 #include <QGLFramebufferObject>
@@ -56,6 +57,10 @@ static const QVector2D TexCoords[4] = {
   QVector2D(1, 1)
 };
 
+static const QVector3D XAxis(1.f, 0.f, 0.f);
+static const QVector3D YAxis(0.f, 1.f, 0.f);
+static const QVector3D ZAxis(0.f, 0.f, 1.f);
+
 
 struct DSP {
   DSP(void)
@@ -75,9 +80,10 @@ public:
   ThreeDWidgetPrivate(void)
     : xRot(0.f)
     , yRot(0.f)
+    , zRot(0.f)
     , xTrans(0.f)
     , yTrans(0.f)
-    , zoom(-2.77f)
+    , zTrans(0.f)
     , lastFrameFBO(nullptr)
     , imageFBO(nullptr)
     , mixShaderProgram(nullptr)
@@ -103,9 +109,10 @@ public:
 
   GLfloat xRot;
   GLfloat yRot;
+  GLfloat zRot;
   GLfloat xTrans;
   GLfloat yTrans;
-  GLfloat zoom;
+  GLfloat zTrans;
   QMatrix4x4 mvMatrix;
 
   QGLFramebufferObject *lastFrameFBO;
@@ -167,6 +174,7 @@ ThreeDWidget::ThreeDWidget(QWidget *parent)
 
 ThreeDWidget::~ThreeDWidget()
 {
+  // ...
 }
 
 
@@ -218,8 +226,6 @@ void ThreeDWidget::initializeGL(void)
   initializeOpenGLFunctions();
 
   glEnable(GL_ALPHA_TEST);
-  glEnable(GL_BLEND);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   glDisable(GL_TEXTURE_2D);
   glDisable(GL_DEPTH_TEST);
   glDisable(GL_CULL_FACE);
@@ -310,29 +316,26 @@ void ThreeDWidget::paintGL(void)
     glGetIntegerv(GL_ACTIVE_TEXTURE, &h4);
     qDebug() << "texture handles:" << h0 << h1 << h2 << h3 << h4;
     emit ready();
-    return;
   }
+  else if (d->lastFrameFBO != nullptr && d->imageFBO != nullptr && d->mixShaderProgram != nullptr && d->timestamp > 0) {
+    d->mixShaderProgram->setAttributeArray(PROGRAM_VERTEX_ATTRIBUTE, Vertices);
+    d->mixShaderProgram->setUniformValue(d->mvMatrixLocation, d->mvMatrix);
+    glClearColor(.15f, .15f, .15f, 1.f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glViewport(0, 0, width(), height());
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
-  if (d->lastFrameFBO == nullptr || d->imageFBO == nullptr || d->mixShaderProgram == nullptr || d->timestamp == 0)
-    return;
+    d->imageFBO->bind();
+    d->mixShaderProgram->setAttributeArray(PROGRAM_VERTEX_ATTRIBUTE, Vertices4FBO);
+    d->mixShaderProgram->setUniformValue(d->mvMatrixLocation, QMatrix4x4());
+    glViewport(0, 0, d->imageFBO->width(), d->imageFBO->height());
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    glActiveTexture(GL_TEXTURE3);
+    glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 0, 0, d->imageFBO->width(), d->imageFBO->height(), 0);
+    d->imageFBO->release();
 
-  d->mixShaderProgram->setAttributeArray(PROGRAM_VERTEX_ATTRIBUTE, Vertices);
-  d->mixShaderProgram->setUniformValue(d->mvMatrixLocation, d->mvMatrix);
-  glClearColor(.15f, .15f, .15f, 1.f);
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  glViewport(0, 0, width(), height());
-  glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-
-  d->imageFBO->bind();
-  d->mixShaderProgram->setAttributeArray(PROGRAM_VERTEX_ATTRIBUTE, Vertices4FBO);
-  d->mixShaderProgram->setUniformValue(d->mvMatrixLocation, QMatrix4x4());
-  glViewport(0, 0, d->imageFBO->width(), d->imageFBO->height());
-  glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-  glActiveTexture(GL_TEXTURE3);
-  glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 0, 0, d->imageFBO->width(), d->imageFBO->height(), 0);
-  d->imageFBO->release();
-
-  // d->lastFrameFBO->toImage().save(QString("images/lastFrameFBO-%1.jpg").arg(d->timestamp, 14, 10, QChar('0')), "JPG", 30);
+    // d->lastFrameFBO->toImage().save(QString("images/lastFrameFBO-%1.jpg").arg(d->timestamp, 14, 10, QChar('0')), "JPG", 30);
+  }
 }
 
 
@@ -413,7 +416,7 @@ void ThreeDWidget::mouseMoveEvent(QMouseEvent *e)
 void ThreeDWidget::wheelEvent(QWheelEvent *e)
 {
   Q_D(ThreeDWidget);
-  d->zoom += (e->delta() < 0 ? -1 : 1 ) * ((e->modifiers() & Qt::ShiftModifier)? .04f : .2f);
+  d->zTrans += (e->delta() < 0 ? -1 : 1 ) * ((e->modifiers() & Qt::ShiftModifier)? .04f : .2f);
   makeWorldMatrix();
   updateGL();
 }
@@ -423,10 +426,11 @@ void ThreeDWidget::makeWorldMatrix(void)
 {
   Q_D(ThreeDWidget);
   d->mvMatrix.setToIdentity();
-  d->mvMatrix.perspective(45.f, float(width()) / height(), .01f, 12.f);
-  d->mvMatrix.translate(0.f, 0.f, d->zoom);
-  d->mvMatrix.rotate(d->xRot, 1.f, 0.f, 0.f);
-  d->mvMatrix.rotate(d->yRot, 0.f, 1.f, 0.f);
+  d->mvMatrix.perspective(60.f, float(width()) / height(), .01f, 12.f);
+  d->mvMatrix.translate(0.f, 0.f, d->zTrans);
+  d->mvMatrix.rotate(d->xRot, XAxis);
+  d->mvMatrix.rotate(d->yRot, YAxis);
+  d->mvMatrix.rotate(d->zRot, ZAxis);
   d->mvMatrix.translate(d->xTrans, d->yTrans, 0.f);
 }
 
@@ -484,10 +488,34 @@ void ThreeDWidget::setHaloRadius(int r)
   const int x1 = x0 + 2 * r;
   const int y0 = -(2 * r / 3);
   const int y1 =   2 * r / 3;
-  for (int y = y0; y < y1; ++y)
-    for (int x = x0; x < x1; ++x)
+  for (int y = y0; y < y1; ++y) {
+    for (int x = x0; x < x1; ++x) {
+      if (d->haloSize >= ThreeDWidgetPrivate::MaxHaloSize) {
+        qWarning() << "Halo cannot grow bigger than" << ThreeDWidgetPrivate::MaxHaloSize << "entries.";
+        goto end;
+      }
       d->halo[d->haloSize++] = QVector2D(qreal(x) / DepthWidth, qreal(y) / DepthHeight);
+    }
+  }
+end:
   d->mixShaderProgram->setUniformValueArray(d->haloLocation, d->halo, d->haloSize);
   d->mixShaderProgram->setUniformValue(d->haloSizeLocation, d->haloSize);
+  updateGL();
+}
+
+
+void ThreeDWidget::setRefPoints(const QVector<QVector3D>& refPoints)
+{
+  Q_D(ThreeDWidget);
+  Q_ASSERT_X(refPoints.count() == 3, "ThreeDWidget::setRefPoints()", "refPoints.count() must equal 3");
+  const QVector3D &P = refPoints.at(0);
+  const QVector3D &Q = refPoints.at(1);
+  const QVector3D &R = refPoints.at(2);
+  const QVector3D &norm = QVector3D::normal(Q - P, R - P);
+  d->xRot = qRadiansToDegrees(qAcos(norm.z()));
+  d->yRot = 0.f;
+  d->zRot = 0.f;
+  qDebug() << "ThreeDWidget::setRefPoints(" << refPoints << ") ->" << norm << d->xRot;
+  makeWorldMatrix();
   updateGL();
 }
