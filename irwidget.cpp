@@ -47,7 +47,7 @@ static const float InfraredSourceValueMaximum = float(USHRT_MAX);
 // The InfraredOutputValueMinimum value is used to set the lower limit, post processing, of the
 // infrared data that we will render.
 // Increasing or decreasing this value sets a brightness "wall" either closer or further away.
-static const float InfraredOutputValueMinimum = .01f;
+static const float InfraredOutputValueMinimum = 0.f;
 
 // The InfraredOutputValueMaximum value is the upper limit, post processing, of the
 // infrared data that we will render.
@@ -58,14 +58,14 @@ static const float InfraredOutputValueMaximum = 1.f;
 // Depending on the visualization requirements for a given application, this value can be
 // hard coded, as was done here, or calculated by averaging the intensity for each pixel prior
 // to rendering.
-static const float InfraredSceneValueAverage = .08f;
+static const float InfraredSceneValueAverage = .1f;
 
-/// The InfraredSceneStandardDeviations value specifies the number of standard deviations
-/// to apply to InfraredSceneValueAverage. This value was selected by analyzing data
-/// from a given scene.
-/// Depending on the visualization requirements for a given application, this value can be
-/// hard coded, as was done here, or calculated at runtime.
-#define InfraredSceneStandardDeviations 3.0f
+// The InfraredSceneStandardDeviations value specifies the number of standard deviations
+// to apply to InfraredSceneValueAverage. This value was selected by analyzing data
+// from a given scene.
+// Depending on the visualization requirements for a given application, this value can be
+// hard coded, as was done here, or calculated at runtime.
+static const float InfraredSceneStandardDeviations = 3.f;
 
 
 IRWidget::IRWidget(QWidget *parent)
@@ -86,33 +86,15 @@ void IRWidget::setIRData(INT64 nTime, const UINT16 *pBuffer, int nWidth, int nHe
   if (nWidth != IRWidth || nHeight != IRHeight || pBuffer == nullptr)
     return;
 
-  /*
-   * float intensityRatio = static_cast<float>(*pBuffer) / InfraredSourceValueMaximum;
-
-      // 2. dividing by the (average scene value * standard deviations)
-      intensityRatio /= InfraredSceneValueAverage * InfraredSceneStandardDeviations;
-
-      // 3. limiting the value to InfraredOutputValueMaximum
-      intensityRatio = min(InfraredOutputValueMaximum, intensityRatio);
-
-      // 4. limiting the lower value InfraredOutputValueMinimym
-      intensityRatio = max(InfraredOutputValueMinimum, intensityRatio);
-
-      // 5. converting the normalized value to a byte and using the result
-      // as the RGB components required by the image
-      byte intensity = static_cast<byte>(intensityRatio * 255.0f);
-      pDest->rgbRed = intensity;
-      pDest->rgbGreen = intensity;
-      pDest->rgbBlue = intensity;
-   */
-
   const UINT16* pBufferEnd = pBuffer + nWidth * nHeight;
   BYTE *dst = d->irFrame.bits();
   while (pBuffer < pBufferEnd) {
-    float intensityRatio = float(*pBuffer) / InfraredSourceValueMaximum;
-    intensityRatio /= InfraredSceneValueAverage * InfraredSceneStandardDeviations;
+    float intensityRatio = float(*pBuffer)
+        / InfraredSourceValueMaximum
+        / InfraredSceneValueAverage
+        / InfraredSceneStandardDeviations;
     intensityRatio = clamp(intensityRatio, InfraredOutputValueMinimum, InfraredOutputValueMaximum);
-    byte intensity = byte(intensityRatio * 255.0f);
+    BYTE intensity = BYTE(intensityRatio * 0xff);
     dst[0] = intensity;
     dst[1] = intensity;
     dst[2] = intensity;
