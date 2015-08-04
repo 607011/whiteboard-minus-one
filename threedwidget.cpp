@@ -33,22 +33,25 @@
 #include <QMutexLocker>
 #include <QImage>
 #include <QFile>
+#include <QRect>
+#include <QSizeF>
+#include <QPoint>
 
 #include <Kinect.h>
 
 static const int PROGRAM_VERTEX_ATTRIBUTE = 0;
 static const int PROGRAM_TEXCOORD_ATTRIBUTE = 1;
-static const QVector3D Vertices[4] = {
-  QVector3D(+1.920f, +1.080f, 0.f),
-  QVector3D(+1.920f, -1.080f, 0.f),
-  QVector3D(-1.920f, +1.080f, 0.f),
-  QVector3D(-1.920f, -1.080f, 0.f)
+static const QVector2D Vertices[4] = {
+  QVector2D(+1.920f, +1.080f),
+  QVector2D(+1.920f, -1.080f),
+  QVector2D(-1.920f, +1.080f),
+  QVector2D(-1.920f, -1.080f)
 };
-static const QVector3D Vertices4FBO[4] = {
-  QVector3D(-1.f, -1.f, 0.f),
-  QVector3D(-1.f, +1.f, 0.f),
-  QVector3D(+1.f, -1.f, 0.f),
-  QVector3D(+1.f, +1.f, 0.f)
+static const QVector2D Vertices4FBO[4] = {
+  QVector2D(-1.f, -1.f),
+  QVector2D(-1.f, +1.f),
+  QVector2D(+1.f, -1.f),
+  QVector2D(+1.f, +1.f)
 };
 static const QVector2D TexCoords[4] = {
   QVector2D(0, 0),
@@ -87,7 +90,8 @@ public:
     , zRot(0.f)
     , xTrans(0.f)
     , yTrans(0.f)
-    , zTrans(0.f)
+    , zTrans(-2.7f)
+    , scale(1.0)
     , lastFrameFBO(nullptr)
     , imageFBO(nullptr)
     , mixShaderProgram(nullptr)
@@ -149,6 +153,10 @@ public:
   GLint haloLocation;
   GLint haloSizeLocation;
 
+  qreal scale;
+  QRect viewport;
+  QSize resolution;
+  QPoint offset;
   QPoint lastMousePos;
   INT64 timestamp;
   bool firstPaintEventPending;
@@ -185,8 +193,6 @@ ThreeDWidget::~ThreeDWidget()
 void ThreeDWidget::makeShader(void)
 {
   Q_D(ThreeDWidget);
-  qDebug() << "ThreeDWidget::makeShader()";
-
   SafeRenew(d->mixShaderProgram, new QGLShaderProgram);
   d->mixShaderProgram->addShaderFromSourceFile(QGLShader::Fragment, ":/shaders/mix.fs.glsl");
   d->mixShaderProgram->addShaderFromSourceFile(QGLShader::Vertex, ":/shaders/mix.vs.glsl");
@@ -286,9 +292,7 @@ void ThreeDWidget::initializeGL(void)
 
 void ThreeDWidget::resizeGL(int width, int height)
 {
-  Q_UNUSED(width);
-  Q_UNUSED(height);
-  // ...
+  updateViewport(width, height);
 }
 
 
@@ -318,7 +322,6 @@ void ThreeDWidget::paintGL(void)
     glGetIntegerv(GL_ACTIVE_TEXTURE, &h3);
     glActiveTexture(GL_TEXTURE4);
     glGetIntegerv(GL_ACTIVE_TEXTURE, &h4);
-    qDebug() << "texture handles:" << h0 << h1 << h2 << h3 << h4;
     emit ready();
   }
   else if (d->lastFrameFBO != nullptr && d->imageFBO != nullptr && d->mixShaderProgram != nullptr && d->timestamp > 0) {
@@ -327,6 +330,7 @@ void ThreeDWidget::paintGL(void)
     glClearColor(.15f, .15f, .15f, 1.f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glViewport(0, 0, width(), height());
+    // glViewport(d->viewport.x(), d->viewport.y(), d->viewport.width(), d->viewport.height());
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
     d->imageFBO->bind();
@@ -426,6 +430,7 @@ void ThreeDWidget::wheelEvent(QWheelEvent *e)
 {
   Q_D(ThreeDWidget);
   d->zTrans += (e->delta() < 0 ? -1 : 1 ) * ((e->modifiers() & Qt::ShiftModifier)? .04f : .2f);
+  updateViewport();
   makeWorldMatrix();
   updateGL();
 }
@@ -435,13 +440,35 @@ void ThreeDWidget::makeWorldMatrix(void)
 {
   Q_D(ThreeDWidget);
   d->mvMatrix.setToIdentity();
-  d->mvMatrix.perspective(VFOV, float(width()) / height(), .01f, 12.f);
+  d->mvMatrix.perspective(VFOV, float(width()) / float(height()), 0.001f, 20.f);
   d->mvMatrix.translate(0.f, 0.f, d->zTrans);
   d->mvMatrix.rotate(d->xRot, XAxis);
   d->mvMatrix.rotate(d->yRot, YAxis);
   d->mvMatrix.rotate(d->zRot, ZAxis);
   d->mvMatrix.translate(d->xTrans, d->yTrans, 0.f);
-  qDebug() << d->zTrans;
+}
+
+
+void ThreeDWidget::updateViewport(void)
+{
+  updateViewport(size());
+}
+
+
+void ThreeDWidget::updateViewport(int w, int h)
+{
+  Q_D(ThreeDWidget);
+  const QSizeF &glSize = d->scale * QSizeF(d->imageFBO->size());
+  const QPoint &topLeft = QPoint(w - int(glSize.width()), h - int(glSize.height())) / 2;
+  d->viewport = QRect(topLeft + d->offset, glSize.toSize());
+  d->resolution = d->viewport.size();
+  updateGL();
+}
+
+
+void ThreeDWidget::updateViewport(const QSize &sz)
+{
+  updateViewport(sz.width(), sz.height());
 }
 
 
@@ -525,7 +552,7 @@ void ThreeDWidget::setRefPoints(const QVector<QVector3D>& refPoints)
   d->xRot = qRadiansToDegrees(qAcos(norm.z()));
   d->yRot = 0.f;
   d->zRot = 0.f;
-  qDebug() << "ThreeDWidget::setRefPoints(" << refPoints << ") ->" << norm << d->xRot;
+  // d->zTrans = -1e-3 * (P.z() + Q.z() + R.z()) / 3;
   makeWorldMatrix();
   updateGL();
 }

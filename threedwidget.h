@@ -77,6 +77,11 @@ private:
 
   void makeShader(void);
   void makeWorldMatrix(void);
+
+  void updateViewport(void);
+  void updateViewport(int w, int h);
+  void updateViewport(const QSize &);
+
 };
 
 
