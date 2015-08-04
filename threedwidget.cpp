@@ -61,6 +61,9 @@ static const QVector3D XAxis(1.f, 0.f, 0.f);
 static const QVector3D YAxis(0.f, 1.f, 0.f);
 static const QVector3D ZAxis(0.f, 0.f, 1.f);
 
+static const float HFOV = 84.1f;
+static const float VFOV = 53.8f;
+
 
 struct DSP {
   DSP(void)
@@ -74,6 +77,7 @@ struct DSP {
   INT16 x;
   INT16 y;
 };
+
 
 class ThreeDWidgetPrivate {
 public:
@@ -225,7 +229,7 @@ void ThreeDWidget::initializeGL(void)
 
   initializeOpenGLFunctions();
 
-  glEnable(GL_ALPHA_TEST);
+  glDisable(GL_ALPHA_TEST);
   glDisable(GL_TEXTURE_2D);
   glDisable(GL_DEPTH_TEST);
   glDisable(GL_CULL_FACE);
@@ -399,17 +403,22 @@ void ThreeDWidget::mouseReleaseEvent(QMouseEvent *)
 void ThreeDWidget::mouseMoveEvent(QMouseEvent *e)
 {
   Q_D(ThreeDWidget);
+  bool changed = false;
   if (e->buttons() & Qt::LeftButton) {
     d->xRot += .3f * (e->y() - d->lastMousePos.y());
     d->yRot += .3f * (e->x() - d->lastMousePos.x());
+    changed = true;
   }
   else if (e->buttons() & Qt::RightButton) {
     d->xTrans += .01f * (e->x() - d->lastMousePos.x());
     d->yTrans -= .01f * (e->y() - d->lastMousePos.y());
+    changed = true;
+  }
+  if (changed) {
+    makeWorldMatrix();
+    updateGL();
   }
   d->lastMousePos = e->pos();
-  makeWorldMatrix();
-  updateGL();
 }
 
 
@@ -426,12 +435,13 @@ void ThreeDWidget::makeWorldMatrix(void)
 {
   Q_D(ThreeDWidget);
   d->mvMatrix.setToIdentity();
-  d->mvMatrix.perspective(60.f, float(width()) / height(), .01f, 12.f);
+  d->mvMatrix.perspective(VFOV, float(width()) / height(), .01f, 12.f);
   d->mvMatrix.translate(0.f, 0.f, d->zTrans);
   d->mvMatrix.rotate(d->xRot, XAxis);
   d->mvMatrix.rotate(d->yRot, YAxis);
   d->mvMatrix.rotate(d->zRot, ZAxis);
   d->mvMatrix.translate(d->xTrans, d->yTrans, 0.f);
+  qDebug() << d->zTrans;
 }
 
 
