@@ -104,7 +104,6 @@ void IRWidget::setIRData(INT64 nTime, const UINT16 *pBuffer, int nWidth, int nHe
   }
 
   update();
-
 }
 
 
