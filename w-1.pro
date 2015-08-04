@@ -20,7 +20,8 @@ SOURCES += main.cpp \
     depthwidget.cpp \
     videowidget.cpp \
     rgbdwidget.cpp \
-    threedwidget.cpp
+    threedwidget.cpp \
+    irwidget.cpp
 
 HEADERS  += mainwindow.h \
     util.h \
@@ -28,7 +29,8 @@ HEADERS  += mainwindow.h \
     videowidget.h \
     rgbdwidget.h \
     threedwidget.h \
-    globals.h
+    globals.h \
+    irwidget.h
 
 FORMS    += mainwindow.ui
 

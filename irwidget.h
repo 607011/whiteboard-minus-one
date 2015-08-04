@@ -17,18 +17,38 @@
 
 */
 
-#ifndef __GLOBALS_H_
-#define __GLOBALS_H_
+#ifndef __IRWIDGET_H_
+#define __IRWIDGET_H_
 
-static const int DepthWidth  = 512;
-static const int DepthHeight = 424;
-static const int DepthSize = DepthWidth * DepthHeight;
-static const int IRWidth  = 512;
-static const int IRHeight = 424;
-static const int IRSize = IRWidth * IRHeight;
-static const int ColorWidth = 1920;
-static const int ColorHeight = 1080;
-static const int ColorSize = ColorWidth * ColorHeight;
+#include <Kinect.h>
 
-#endif // __GLOBALS_H_
+#include <QWidget>
+#include <QPaintEvent>
+#include <QResizeEvent>
+#include <QScopedPointer>
 
+class IRWidgetPrivate;
+
+class IRWidget : public QWidget
+{
+  Q_OBJECT
+
+public:
+  explicit IRWidget(QWidget *parent = nullptr);
+  void setIRData(INT64 nTime, const UINT16* pBuffer, int nWidth, int nHeight);
+
+protected:
+  void resizeEvent(QResizeEvent*);
+  void paintEvent(QPaintEvent*);
+
+signals:
+
+public slots:
+
+private:
+  QScopedPointer<IRWidgetPrivate> d_ptr;
+  Q_DECLARE_PRIVATE(IRWidget)
+  Q_DISABLE_COPY(IRWidget)
+};
+
+#endif // __IRWIDGET_H_

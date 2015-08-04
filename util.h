@@ -65,6 +65,13 @@ inline void SafeRelease(Interface *&pInterfaceToRelease)
 
 
 template<typename T>
+inline T clamp(T x, T a, T b)
+{
+  return x < a ? a : (x > b ? b : x);
+}
+
+
+template<typename T>
 inline T square(T x)
 {
   return x * x;

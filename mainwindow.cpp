@@ -28,6 +28,7 @@
 #include "videowidget.h"
 #include "rgbdwidget.h"
 #include "threedwidget.h"
+#include "irwidget.h"
 #include "mainwindow.h"
 
 #include "ui_mainwindow.h"
@@ -45,6 +46,7 @@ public:
     , videoWidget(nullptr)
     , rgbdWidget(nullptr)
     , threeDWidget(nullptr)
+    , irWidget(nullptr)
     , colorBuffer(new RGBQUAD[ColorSize])
   {
     Q_UNUSED(parent);
@@ -67,6 +69,7 @@ public:
   VideoWidget *videoWidget;
   RGBDWidget *rgbdWidget;
   ThreeDWidget *threeDWidget;
+  IRWidget *irWidget;
 
   RGBQUAD *colorBuffer;
 };
@@ -86,12 +89,13 @@ MainWindow::MainWindow(QWidget *parent)
   d->rgbdWidget = new RGBDWidget;
   d->videoWidget = new VideoWidget;
   d->threeDWidget = new ThreeDWidget;
-
+  d->irWidget = new IRWidget;
 
   QBoxLayout *hbox = new QBoxLayout(QBoxLayout::LeftToRight);
   hbox->addWidget(d->videoWidget);
   hbox->addWidget(d->depthWidget);
   hbox->addWidget(d->rgbdWidget);
+  hbox->addWidget(d->irWidget);
 
   QBoxLayout *vbox = new QBoxLayout(QBoxLayout::TopToBottom);
   vbox->addLayout(hbox);
@@ -141,13 +145,15 @@ void MainWindow::timerEvent(QTimerEvent*)
   Q_D(MainWindow);
   bool depthReady = false;
   bool rgbReady = false;
+  bool irReady = false;
   INT64 nTime = 0;
   UINT16 *pDepthBuffer = nullptr;
+  UINT16 *pIRBuffer = nullptr;
   IDepthFrame* pDepthFrame = nullptr;
   USHORT nDepthMinReliableDistance = 0;
   USHORT nDepthMaxDistance = 0;
 
-  if (d->depthFrameReader) {
+  if (d->depthFrameReader != nullptr) {
     HRESULT hr = d->depthFrameReader->AcquireLatestFrame(&pDepthFrame);
     if (SUCCEEDED(hr)) {
       IFrameDescription *pDepthFrameDescription = nullptr;
@@ -178,8 +184,34 @@ void MainWindow::timerEvent(QTimerEvent*)
     }
   }
 
+  IInfraredFrame *pIRFrame = nullptr;
+  if (d->irFrameReader != nullptr) {
+    HRESULT hr = d->irFrameReader->AcquireLatestFrame(&pIRFrame);
+    if (SUCCEEDED(hr)) {
+      IFrameDescription *pIRFrameDescription = nullptr;
+      int nWidth = 0;
+      int nHeight = 0;
+      UINT nBufferSize = 0;
+      hr = pIRFrame->get_RelativeTime(&nTime);
+      if (SUCCEEDED(hr))
+        hr = pIRFrame->get_FrameDescription(&pIRFrameDescription);
+      if (SUCCEEDED(hr))
+        hr = pIRFrameDescription->get_Width(&nWidth);
+      if (SUCCEEDED(hr))
+        hr = pIRFrameDescription->get_Height(&nHeight);
+      if (SUCCEEDED(hr))
+        hr = pIRFrame->AccessUnderlyingBuffer(&nBufferSize, &pIRBuffer);
+      if (SUCCEEDED(hr)) {
+        d->irWidget->setIRData(nTime, pIRBuffer, nWidth, nHeight);
+        irReady = true;
+      }
+      SafeRelease(pIRFrameDescription);
+    }
+  }
+
+
   IColorFrame* pColorFrame = nullptr;
-  if (d->colorFrameReader) {
+  if (d->colorFrameReader != nullptr) {
     HRESULT hr = d->colorFrameReader->AcquireLatestFrame(&pColorFrame);
     if (SUCCEEDED(hr)) {
       IFrameDescription *pRGBFrameDescription = nullptr;
@@ -217,12 +249,13 @@ void MainWindow::timerEvent(QTimerEvent*)
     }
   }
 
-  if (rgbReady && depthReady) {
+  if (rgbReady && depthReady && irReady) {
     d->threeDWidget->process(nTime, reinterpret_cast<const uchar*>(d->colorBuffer), pDepthBuffer, nDepthMinReliableDistance, nDepthMaxDistance);
   }
 
   SafeRelease(pDepthFrame);
   SafeRelease(pColorFrame);
+  SafeRelease(pIRFrame);
 }
 
 
@@ -238,7 +271,7 @@ bool MainWindow::initKinect(void)
   if (FAILED(hr))
     return false;
 
-  if (d->kinectSensor) {
+  if (d->kinectSensor != nullptr) {
     IDepthFrameSource *pDepthFrameSource = nullptr;
     hr = d->kinectSensor->Open();
 
@@ -254,6 +287,13 @@ bool MainWindow::initKinect(void)
     if (SUCCEEDED(hr))
       hr = pColorFrameSource->OpenReader(&d->colorFrameReader);
     SafeRelease(pColorFrameSource);
+
+    IInfraredFrameSource *pIRFrameSource = nullptr;
+    if (SUCCEEDED(hr))
+      hr = d->kinectSensor->get_InfraredFrameSource(&pIRFrameSource);
+    if (SUCCEEDED(hr))
+      hr = pIRFrameSource->OpenReader(&d->irFrameReader);
+    SafeRelease(pIRFrameSource);
   }
 
   if (!d->kinectSensor || FAILED(hr)) {
