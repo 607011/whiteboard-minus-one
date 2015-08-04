@@ -23,6 +23,8 @@
 #include <QDebug>
 #include <QImage>
 #include <QPainter>
+#include <QElapsedTimer>
+#include <QFont>
 
 class DepthWidgetPrivate
 {
@@ -31,6 +33,9 @@ public:
     : depthFrame(DepthWidth, DepthHeight, QImage::Format_ARGB32)
     , windowAspectRatio(1.0)
     , imageAspectRatio(qreal(DepthWidth) / qreal(DepthHeight))
+    , fpsArray(10)
+    , fpsIndex(0)
+    , fps(25.f)
   {
     for (int h = 0; h < NCOLORS; ++h) {
       QColor c = QColor::fromHsl(NCOLORS * (NCOLORS - h) / 360, 128 , 128);
@@ -52,6 +57,10 @@ public:
 
   qreal windowAspectRatio;
   qreal imageAspectRatio;
+  QElapsedTimer timer;
+  QVector<float> fpsArray;
+  int fpsIndex;
+  float fps;
 };
 
 DepthWidget::DepthWidget(QWidget *parent)
@@ -90,6 +99,11 @@ void DepthWidget::paintEvent(QPaintEvent *)
   }
 
   p.drawImage(destRect, d->depthFrame);
+  p.setPen(Qt::white);
+  p.setBrush(Qt::transparent);
+  static const QFont defaultFont("system, sans-serif", 8);
+  p.setFont(defaultFont);
+  p.drawText(4, height() - 4, QString("%1 fps").arg(d->fps, 0, 'f', 1));
 }
 
 
@@ -98,6 +112,16 @@ void DepthWidget::setDepthData(INT64 nTime, const UINT16 *pBuffer, int nWidth, i
   Q_D(DepthWidget);
   Q_UNUSED(nTime);
   Q_UNUSED(nMinDepth);
+
+  qint64 ms = d->timer.elapsed();
+  d->timer.start();
+  d->fpsArray[d->fpsIndex] = 1e3f / ms;
+  if (++d->fpsIndex >= d->fpsArray.count())
+    d->fpsIndex = 0;
+  float fpsSum = 0.f;
+  for (int i = 0; i < d->fpsArray.count(); ++i)
+    fpsSum += d->fpsArray.at(i);
+  d->fps = fpsSum / d->fpsArray.count();
 
   if (nWidth != DepthWidth || nHeight != DepthHeight || pBuffer == nullptr)
     return;
@@ -122,7 +146,6 @@ void DepthWidget::setDepthData(INT64 nTime, const UINT16 *pBuffer, int nWidth, i
     dst += 4;
     ++pBuffer;
   }
-
   update();
 }
 
