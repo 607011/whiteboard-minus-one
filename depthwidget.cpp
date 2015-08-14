@@ -33,12 +33,12 @@ public:
     : depthFrame(DepthWidth, DepthHeight, QImage::Format_ARGB32)
     , windowAspectRatio(1.0)
     , imageAspectRatio(qreal(DepthWidth) / qreal(DepthHeight))
-    , fpsArray(10)
+    , fpsArray(10, 0.f)
     , fpsIndex(0)
-    , fps(25.f)
+    , fps(0.f)
   {
     for (int h = 0; h < NCOLORS; ++h) {
-      QColor c = QColor::fromHsl(NCOLORS * (NCOLORS - h) / 360, 128 , 128);
+      QColor c = QColor::fromHsl(NCOLORS * (NCOLORS - h) / 360, 128, 128);
       hue[h].rgbRed = c.red();
       hue[h].rgbGreen = c.green();
       hue[h].rgbBlue = c.blue();
@@ -55,6 +55,7 @@ public:
   QImage depthFrame;
   RGBQUAD hue[NCOLORS];
 
+  QRect destRect;
   qreal windowAspectRatio;
   qreal imageAspectRatio;
   QElapsedTimer timer;
@@ -77,6 +78,14 @@ void DepthWidget::resizeEvent(QResizeEvent* e)
 {
   Q_D(DepthWidget);
   d->windowAspectRatio = (qreal)e->size().width() / e->size().height();
+  if (d->windowAspectRatio < d->imageAspectRatio) {
+    const int h = qRound(width() / d->imageAspectRatio);
+    d->destRect = QRect(0, (height()-h)/2, width(), h);
+  }
+  else {
+    const int w = qRound(height() * d->imageAspectRatio);
+    d->destRect = QRect((width()-w)/2, 0, w, height());
+  }
 }
 
 
@@ -85,20 +94,11 @@ void DepthWidget::paintEvent(QPaintEvent *)
   Q_D(DepthWidget);
   QPainter p(this);
 
-  p.fillRect(rect(), Qt::gray);
-  QRect destRect;
   if (d->depthFrame.isNull() || qFuzzyIsNull(d->imageAspectRatio) || qFuzzyIsNull(d->windowAspectRatio))
     return;
-  if (d->windowAspectRatio < d->imageAspectRatio) {
-    const int h = int(width() / d->imageAspectRatio);
-    destRect = QRect(0, (height()-h)/2, width(), h);
-  }
-  else {
-    const int w = int(height() * d->imageAspectRatio);
-    destRect = QRect((width()-w)/2, 0, w, height());
-  }
 
-  p.drawImage(destRect, d->depthFrame);
+  p.fillRect(rect(), Qt::gray);
+  p.drawImage(d->destRect, d->depthFrame);
   p.setPen(Qt::white);
   p.setBrush(Qt::transparent);
   static const QFont defaultFont("system, sans-serif", 8);
@@ -113,7 +113,10 @@ void DepthWidget::setDepthData(INT64 nTime, const UINT16 *pBuffer, int nWidth, i
   Q_UNUSED(nTime);
   Q_UNUSED(nMinDepth);
 
-  qint64 ms = d->timer.elapsed();
+  if (nWidth != DepthWidth || nHeight != DepthHeight || pBuffer == nullptr)
+    return;
+
+  const qint64 ms = d->timer.elapsed();
   d->timer.start();
   d->fpsArray[d->fpsIndex] = 1e3f / ms;
   if (++d->fpsIndex >= d->fpsArray.count())
@@ -123,27 +126,18 @@ void DepthWidget::setDepthData(INT64 nTime, const UINT16 *pBuffer, int nWidth, i
     fpsSum += d->fpsArray.at(i);
   d->fps = fpsSum / d->fpsArray.count();
 
-  if (nWidth != DepthWidth || nHeight != DepthHeight || pBuffer == nullptr)
-    return;
-
-  const UINT16* pBufferEnd = pBuffer + nWidth * nHeight;
-  BYTE *dst = d->depthFrame.bits();
+  const UINT16 *const pBufferEnd = pBuffer + DepthSize;
+  QRgb *dst = reinterpret_cast<QRgb*>(d->depthFrame.bits());
   while (pBuffer < pBufferEnd) {
     USHORT depth = *pBuffer;
     if (depth == 0 || depth == USHRT_MAX) {
-      dst[0] = 0x00U;
-      dst[1] = 0x00U;
-      dst[2] = 0x00U;
-      dst[3] = 0xffU;
+      *dst = qRgb(0, 0, 0);
     }
     else {
       const RGBQUAD &color = d->hue[DepthWidgetPrivate::NCOLORS * depth / nMaxDepth];
-      dst[0] = color.rgbRed;
-      dst[1] = color.rgbGreen;
-      dst[2] = color.rgbBlue;
-      dst[3] = 0xffU;
+      *dst = qRgb(color.rgbRed, color.rgbGreen, color.rgbBlue);
     }
-    dst += 4;
+    ++dst;
     ++pBuffer;
   }
   update();

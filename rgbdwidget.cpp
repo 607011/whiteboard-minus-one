@@ -33,7 +33,7 @@ class RGBDWidgetPrivate
 {
 public:
   RGBDWidgetPrivate(void)
-    : colorSpaceData(new ColorSpacePoint[DepthSize])
+    : videoFrame(ColorWidth, ColorHeight, QImage::Format_ARGB32)
     , depthSpaceData(new DepthSpacePoint[ColorSize])
     , depthData(new UINT16[DepthSize])
     , tooNear(1100)
@@ -53,13 +53,11 @@ public:
   ~RGBDWidgetPrivate()
   {
     SafeRelease(coordinateMapper);
-    SafeDeleteArray(colorSpaceData);
     SafeDeleteArray(depthSpaceData);
     SafeDeleteArray(depthData);
   }
 
   QImage videoFrame;
-  ColorSpacePoint *colorSpaceData;
   DepthSpacePoint *depthSpaceData;
   UINT16 *depthData;
   RGBQUAD *colorData;
@@ -92,7 +90,6 @@ RGBDWidget::RGBDWidget(QWidget *parent)
   Q_D(RGBDWidget);
   setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding);
   setMinimumSize(DepthWidth / 2, DepthHeight / 2);
-  d->videoFrame = QImage(ColorWidth, ColorHeight, QImage::Format_ARGB32);
   d->imageAspectRatio = qreal(d->videoFrame.width()) / qreal(d->videoFrame.height());
   setMaximumSize(d->videoFrame.size());
 
@@ -102,7 +99,7 @@ RGBDWidget::RGBDWidget(QWidget *parent)
 }
 
 
-void RGBDWidget::setColorData(INT64 nTime, const uchar *pBuffer, int nWidth, int nHeight)
+void RGBDWidget::setColorData(INT64 nTime, const QRgb *pBuffer, int nWidth, int nHeight)
 {
   Q_D(RGBDWidget);
   Q_UNUSED(nTime);
@@ -111,14 +108,14 @@ void RGBDWidget::setColorData(INT64 nTime, const uchar *pBuffer, int nWidth, int
     return;
 
   d->mtx.lock();
-  quint32 *dst = reinterpret_cast<quint32*>(d->videoFrame.bits());
+  QRgb *dst = reinterpret_cast<QRgb*>(d->videoFrame.bits());
   static const QRgb defaultColor = qRgb(88, 250, 44);
   static const QRgb tooNearColor = qRgb(250, 44, 88);
   static const QRgb tooFarColor = qRgb(88, 44, 250);
 
   for (int colorIndex = 0; colorIndex < ColorSize; ++colorIndex) {
     const DepthSpacePoint &dsp = d->depthSpaceData[colorIndex];
-    const quint32 *src = &defaultColor;
+    const QRgb *src = &defaultColor;
     if (dsp.X != -std::numeric_limits<float>::infinity() && dsp.Y != -std::numeric_limits<float>::infinity()) {
       const int dx = qRound(dsp.X);
       const int dy = qRound(dsp.Y);
@@ -129,29 +126,13 @@ void RGBDWidget::setColorData(INT64 nTime, const uchar *pBuffer, int nWidth, int
         else if (depth > d->tooFar)
           src = &tooFarColor;
         else
-          src = reinterpret_cast<const quint32*>(pBuffer) + colorIndex;
+          src = pBuffer + colorIndex;
       }
     }
     dst[colorIndex] = *src;
   }
   d->mtx.unlock();
 
-  update();
-}
-
-
-void RGBDWidget::setNearThreshold(int value)
-{
-  Q_D(RGBDWidget);
-  d->tooNear = value;
-  update();
-}
-
-
-void RGBDWidget::setFarThreshold(int value)
-{
-  Q_D(RGBDWidget);
-  d->tooFar = value;
   update();
 }
 
@@ -169,10 +150,26 @@ void RGBDWidget::setDepthData(INT64 nTime, const UINT16 *pBuffer, int nWidth, in
   d->minDepth = nMinDepth;
   d->maxDepth = nMaxDepth;
 
-    memcpy_s(d->depthData, DepthSize * sizeof(UINT16), pBuffer, DepthSize * sizeof(UINT16));
-    HRESULT hr = d->coordinateMapper->MapColorFrameToDepthSpace(DepthSize, pBuffer, ColorSize, d->depthSpaceData);
-    if (FAILED(hr))
-      qWarning() << "MapColorFrameToDepthSpace() failed.";
+  memcpy_s(d->depthData, DepthSize * sizeof(UINT16), pBuffer, DepthSize * sizeof(UINT16));
+  HRESULT hr = d->coordinateMapper->MapColorFrameToDepthSpace(DepthSize, pBuffer, ColorSize, d->depthSpaceData);
+  if (FAILED(hr))
+    qWarning() << "MapColorFrameToDepthSpace() failed.";
+}
+
+
+void RGBDWidget::setNearThreshold(int value)
+{
+  Q_D(RGBDWidget);
+  d->tooNear = value;
+  update();
+}
+
+
+void RGBDWidget::setFarThreshold(int value)
+{
+  Q_D(RGBDWidget);
+  d->tooFar = value;
+  update();
 }
 
 

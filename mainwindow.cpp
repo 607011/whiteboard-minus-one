@@ -131,8 +131,8 @@ void MainWindow::initAfterGL(void)
   ui->actionMapFromColorToDepth->setChecked(true);
   ui->actionMatchColorAndDepthSpace->setChecked(true);
   ui->haloRadiusVerticalSlider->setValue(10);
-  ui->nearVerticalSlider->setValue(1564);
-  ui->farVerticalSlider->setValue(1954);
+  ui->nearVerticalSlider->setValue(1589);
+  ui->farVerticalSlider->setValue(1903);
   ui->saturationDoubleSpinBox->setValue(1.3);
   ui->gammaDoubleSpinBox->setValue(1.4);
   ui->contrastDoubleSpinBox->setValue(1.1);
@@ -146,116 +146,109 @@ void MainWindow::timerEvent(QTimerEvent*)
   bool depthReady = false;
   bool rgbReady = false;
   bool irReady = false;
-  INT64 nTime = 0;
-  UINT16 *pDepthBuffer = nullptr;
-  UINT16 *pIRBuffer = nullptr;
-  IDepthFrame* pDepthFrame = nullptr;
-  USHORT nDepthMinReliableDistance = 0;
-  USHORT nDepthMaxDistance = 0;
+  INT64 timestamp = 0;
+  UINT16 *depthBuffer = nullptr;
+  UINT16 *irBuffer = nullptr;
+  USHORT minDistance = 0;
+  USHORT maxDistance = 0;
+  int width = 0;
+  int weight = 0;
+  UINT bufferSize = 0;
 
+  IDepthFrame *depthFrame = nullptr;
   if (d->depthFrameReader != nullptr) {
-    HRESULT hr = d->depthFrameReader->AcquireLatestFrame(&pDepthFrame);
+    HRESULT hr = d->depthFrameReader->AcquireLatestFrame(&depthFrame);
     if (SUCCEEDED(hr)) {
-      IFrameDescription *pDepthFrameDescription = nullptr;
-      int nWidth = 0;
-      int nHeight = 0;
-      UINT nBufferSize = 0;
-      hr = pDepthFrame->get_RelativeTime(&nTime);
+      IFrameDescription *depthFrameDescription = nullptr;
+      hr = depthFrame->get_RelativeTime(&timestamp);
       if (SUCCEEDED(hr))
-        hr = pDepthFrame->get_FrameDescription(&pDepthFrameDescription);
+        hr = depthFrame->get_FrameDescription(&depthFrameDescription);
       if (SUCCEEDED(hr))
-        hr = pDepthFrameDescription->get_Width(&nWidth);
+        hr = depthFrameDescription->get_Width(&width);
       if (SUCCEEDED(hr))
-        hr = pDepthFrameDescription->get_Height(&nHeight);
+        hr = depthFrameDescription->get_Height(&weight);
       if (SUCCEEDED(hr))
-        hr = pDepthFrame->get_DepthMinReliableDistance(&nDepthMinReliableDistance);
+        hr = depthFrame->get_DepthMinReliableDistance(&minDistance);
       if (SUCCEEDED(hr)) {
-        nDepthMaxDistance = USHRT_MAX;
-        hr = pDepthFrame->get_DepthMaxReliableDistance(&nDepthMaxDistance);
+        maxDistance = USHRT_MAX;
+        hr = depthFrame->get_DepthMaxReliableDistance(&maxDistance);
       }
       if (SUCCEEDED(hr))
-        hr = pDepthFrame->AccessUnderlyingBuffer(&nBufferSize, &pDepthBuffer);
+        hr = depthFrame->AccessUnderlyingBuffer(&bufferSize, &depthBuffer);
       if (SUCCEEDED(hr)) {
-        d->depthWidget->setDepthData(nTime, pDepthBuffer, nWidth, nHeight, nDepthMinReliableDistance, nDepthMaxDistance);
-        d->rgbdWidget->setDepthData(nTime, pDepthBuffer, nWidth, nHeight, nDepthMinReliableDistance, nDepthMaxDistance);
+        d->depthWidget->setDepthData(timestamp, depthBuffer, width, weight, minDistance, maxDistance);
+        d->rgbdWidget->setDepthData(timestamp, depthBuffer, width, weight, minDistance, maxDistance);
         depthReady = true;
       }
-      SafeRelease(pDepthFrameDescription);
+      SafeRelease(depthFrameDescription);
     }
   }
 
-  IInfraredFrame *pIRFrame = nullptr;
+  IInfraredFrame *irFrame = nullptr;
   if (d->irFrameReader != nullptr) {
-    HRESULT hr = d->irFrameReader->AcquireLatestFrame(&pIRFrame);
+    HRESULT hr = d->irFrameReader->AcquireLatestFrame(&irFrame);
     if (SUCCEEDED(hr)) {
-      IFrameDescription *pIRFrameDescription = nullptr;
-      int nWidth = 0;
-      int nHeight = 0;
-      UINT nBufferSize = 0;
-      hr = pIRFrame->get_RelativeTime(&nTime);
+      IFrameDescription *irFrameDescription = nullptr;
+      hr = irFrame->get_RelativeTime(&timestamp);
       if (SUCCEEDED(hr))
-        hr = pIRFrame->get_FrameDescription(&pIRFrameDescription);
+        hr = irFrame->get_FrameDescription(&irFrameDescription);
       if (SUCCEEDED(hr))
-        hr = pIRFrameDescription->get_Width(&nWidth);
+        hr = irFrameDescription->get_Width(&width);
       if (SUCCEEDED(hr))
-        hr = pIRFrameDescription->get_Height(&nHeight);
+        hr = irFrameDescription->get_Height(&weight);
       if (SUCCEEDED(hr))
-        hr = pIRFrame->AccessUnderlyingBuffer(&nBufferSize, &pIRBuffer);
+        hr = irFrame->AccessUnderlyingBuffer(&bufferSize, &irBuffer);
       if (SUCCEEDED(hr)) {
-        d->irWidget->setIRData(nTime, pIRBuffer, nWidth, nHeight);
+        d->irWidget->setIRData(timestamp, irBuffer, width, weight);
         irReady = true;
       }
-      SafeRelease(pIRFrameDescription);
+      SafeRelease(irFrameDescription);
     }
   }
 
-
-  IColorFrame* pColorFrame = nullptr;
+  IColorFrame* colorFrame = nullptr;
   if (d->colorFrameReader != nullptr) {
-    HRESULT hr = d->colorFrameReader->AcquireLatestFrame(&pColorFrame);
+    HRESULT hr = d->colorFrameReader->AcquireLatestFrame(&colorFrame);
     if (SUCCEEDED(hr)) {
-      IFrameDescription *pRGBFrameDescription = nullptr;
-      int nWidth = 0;
-      int nHeight = 0;
+      IFrameDescription *colorFrameDescription = nullptr;
       ColorImageFormat imageFormat = ColorImageFormat_None;
-      UINT nBufferSize = 0;
-      hr = pColorFrame->get_RelativeTime(&nTime);
+      hr = colorFrame->get_RelativeTime(&timestamp);
       if (SUCCEEDED(hr))
-        hr = pColorFrame->get_FrameDescription(&pRGBFrameDescription);
+        hr = colorFrame->get_FrameDescription(&colorFrameDescription);
+      qDebug() << colorFrameDescription;
       if (SUCCEEDED(hr))
-        hr = pRGBFrameDescription->get_Width(&nWidth);
+        hr = colorFrameDescription->get_Width(&width);
       if (SUCCEEDED(hr))
-        hr = pRGBFrameDescription->get_Height(&nHeight);
+        hr = colorFrameDescription->get_Height(&weight);
       if (SUCCEEDED(hr))
-        hr = pColorFrame->get_RawColorImageFormat(&imageFormat);
+        hr = colorFrame->get_RawColorImageFormat(&imageFormat);
       if (SUCCEEDED(hr)) {
         if (imageFormat == ColorImageFormat_Bgra) {
-          hr = pColorFrame->AccessRawUnderlyingBuffer(&nBufferSize, reinterpret_cast<BYTE**>(&d->colorBuffer));
+          hr = colorFrame->AccessRawUnderlyingBuffer(&bufferSize, reinterpret_cast<BYTE**>(&d->colorBuffer));
         }
-        else if (d->colorBuffer != nullptr) {
-          nBufferSize = ColorSize * sizeof(RGBQUAD);
-          hr = pColorFrame->CopyConvertedFrameDataToArray(nBufferSize, reinterpret_cast<BYTE*>(d->colorBuffer), ColorImageFormat_Bgra);
+        else if (d->colorBuffer != nullptr) { // regular case: imageFormat == ColorImageFormat_Yuy2
+          bufferSize = ColorSize * sizeof(RGBQUAD);
+          hr = colorFrame->CopyConvertedFrameDataToArray(bufferSize, reinterpret_cast<BYTE*>(d->colorBuffer), ColorImageFormat_Bgra);
         }
         else {
           hr = E_FAIL;
         }
       }
       if (SUCCEEDED(hr)) {
-        d->videoWidget->setVideoData(nTime, reinterpret_cast<const uchar*>(d->colorBuffer), nWidth, nHeight);
-        d->rgbdWidget->setColorData(nTime, reinterpret_cast<const uchar*>(d->colorBuffer), nWidth, nHeight);
+        d->videoWidget->setVideoData(timestamp, reinterpret_cast<const QRgb*>(d->colorBuffer), width, weight);
+        d->rgbdWidget->setColorData(timestamp, reinterpret_cast<const QRgb*>(d->colorBuffer), width, weight);
         rgbReady = true;
       }
-      SafeRelease(pRGBFrameDescription);
+      SafeRelease(colorFrameDescription);
     }
   }
 
-  if (rgbReady && depthReady && irReady) {
-    d->threeDWidget->process(nTime, reinterpret_cast<const uchar*>(d->colorBuffer), pDepthBuffer, nDepthMinReliableDistance, nDepthMaxDistance);
-  }
+  if (rgbReady && depthReady && irReady)
+    d->threeDWidget->process(timestamp, reinterpret_cast<const uchar*>(d->colorBuffer), depthBuffer, minDistance, maxDistance);
 
-  SafeRelease(pDepthFrame);
-  SafeRelease(pColorFrame);
-  SafeRelease(pIRFrame);
+  SafeRelease(depthFrame);
+  SafeRelease(colorFrame);
+  SafeRelease(irFrame);
 }
 
 

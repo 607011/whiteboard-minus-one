@@ -55,7 +55,7 @@ public:
   void setFarThreshold(GLfloat);
 
 public slots:
-  void setHaloRadius(int);
+  void setHaloSize(int);
   void setRefPoints(const QVector<QVector3D> &);
 
 signals:
@@ -82,6 +82,8 @@ private:
   void updateViewport(int w, int h);
   void updateViewport(const QSize &);
 
+  void drawOntoScreen(void);
+  void drawIntoFBO(void);
 };
 
 

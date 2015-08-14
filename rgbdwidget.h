@@ -38,7 +38,7 @@ class RGBDWidget : public QWidget
 public:
   explicit RGBDWidget(QWidget *parent = nullptr);
   void setDepthData(INT64 nTime, const UINT16* pBuffer, int nWidth, int nHeight, int nMinDepth, int nMaxDepth);
-  void setColorData(INT64 nTime, const uchar *pBuffer, int nWidth, int nHeight);
+  void setColorData(INT64 nTime, const QRgb *pBuffer, int nWidth, int nHeight);
   void setNearThreshold(int);
   void setFarThreshold(int);
 

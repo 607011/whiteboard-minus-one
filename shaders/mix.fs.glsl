@@ -18,12 +18,12 @@ uniform vec2 uHalo[1024];
 uniform int uHaloSize;
 uniform float uFarThreshold;
 uniform float uNearThreshold;
-uniform bool uRenderForFBO;
+uniform bool uIgnoreDepth;
+
 
 const ivec2 iDepthSize = ivec2(512, 424);
 const vec2 fDepthSize = vec2(iDepthSize);
 
-const float MaxDepth = 6500.0;
 
 bool allDepthsValidWithinHalo(vec2 coord) {
   for (int i = 0; i < uHaloSize; ++i) {
@@ -40,7 +40,7 @@ void main(void)
   vec3 color = vec3(0.0);
   ivec2 dsp = texture2D(uMapTexture, vTexCoord).xy;
   vec2 coord = vec2(dsp) / fDepthSize;
-  if (dsp.x >= 0 && dsp.y >= 0 && dsp.x < iDepthSize.x && dsp.y < iDepthSize.y && allDepthsValidWithinHalo(coord)) {
+  if (uIgnoreDepth || (dsp.x >= 0 && dsp.y >= 0 && dsp.x < iDepthSize.x && dsp.y < iDepthSize.y && allDepthsValidWithinHalo(coord))) {
     color = texture2D(uVideoTexture, vTexCoord).rgb;
     // gamma correction
     color = pow(color, vec3(1.0 / uGamma));

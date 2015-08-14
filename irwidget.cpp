@@ -33,10 +33,10 @@ public:
   ~IRWidgetPrivate(void)
   { /* ... */ }
 
+  QRect destRect;
   QImage irFrame;
-
-  qreal windowAspectRatio;
   qreal imageAspectRatio;
+  qreal windowAspectRatio;
 };
 
 
@@ -87,7 +87,7 @@ void IRWidget::setIRData(INT64 nTime, const UINT16 *pBuffer, int nWidth, int nHe
     return;
 
   const UINT16* pBufferEnd = pBuffer + nWidth * nHeight;
-  BYTE *dst = d->irFrame.bits();
+  QRgb *dst = reinterpret_cast<QRgb*>(d->irFrame.bits());
   while (pBuffer < pBufferEnd) {
     float intensityRatio = float(*pBuffer)
         / InfraredSourceValueMaximum
@@ -95,45 +95,39 @@ void IRWidget::setIRData(INT64 nTime, const UINT16 *pBuffer, int nWidth, int nHe
         / InfraredSceneStandardDeviations;
     intensityRatio = clamp(intensityRatio, InfraredOutputValueMinimum, InfraredOutputValueMaximum);
     BYTE intensity = BYTE(intensityRatio * 0xff);
-    dst[0] = intensity;
-    dst[1] = intensity;
-    dst[2] = intensity;
-    dst[3] = 0xffU;
-    dst += 4;
+    *dst = qRgb(intensity, intensity, intensity);
+    ++dst;
     ++pBuffer;
   }
-
   update();
 }
-
 
 
 void IRWidget::resizeEvent(QResizeEvent* e)
 {
   Q_D(IRWidget);
-  d->windowAspectRatio = (qreal)e->size().width() / e->size().height();
+  d->windowAspectRatio = qreal(e->size().width()) / e->size().height();
+  if (d->windowAspectRatio < d->imageAspectRatio) {
+    const int h = qRound(width() / d->imageAspectRatio);
+    d->destRect = QRect(0, (height()-h)/2, width(), h);
+  }
+  else {
+    const int w = qRound(height() * d->imageAspectRatio);
+    d->destRect = QRect((width()-w)/2, 0, w, height());
+  }
 }
 
 
 void IRWidget::paintEvent(QPaintEvent *)
 {
   Q_D(IRWidget);
-  QPainter p(this);
 
-  p.fillRect(rect(), Qt::gray);
-  QRect destRect;
   if (d->irFrame.isNull() || qFuzzyIsNull(d->imageAspectRatio) || qFuzzyIsNull(d->windowAspectRatio))
     return;
-  if (d->windowAspectRatio < d->imageAspectRatio) {
-    const int h = int(width() / d->imageAspectRatio);
-    destRect = QRect(0, (height()-h)/2, width(), h);
-  }
-  else {
-    const int w = int(height() * d->imageAspectRatio);
-    destRect = QRect((width()-w)/2, 0, w, height());
-  }
 
-  p.drawImage(destRect, d->irFrame);
+  QPainter p(this);
+  p.fillRect(rect(), Qt::gray);
+  p.drawImage(d->destRect, d->irFrame);
 }
 
 

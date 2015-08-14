@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>MainWindow</string>
+   <string>W-1</string>
   </property>
   <widget class="QWidget" name="centralWidget">
    <layout class="QGridLayout" name="gridLayout_2">
@@ -81,11 +81,11 @@
        </widget>
       </item>
       <item>
-       <layout class="QHBoxLayout" name="horizontalLayout">
+       <layout class="QGridLayout" name="horizontalLayout">
         <property name="topMargin">
          <number>8</number>
         </property>
-        <item>
+        <item row="1" column="0">
          <widget class="QSlider" name="nearVerticalSlider">
           <property name="toolTip">
            <string>Near threshold</string>
@@ -116,7 +116,7 @@
           </property>
          </widget>
         </item>
-        <item>
+        <item row="1" column="1">
          <widget class="QSlider" name="farVerticalSlider">
           <property name="toolTip">
            <string>Far threshold</string>
@@ -144,6 +144,20 @@
           </property>
           <property name="tickInterval">
            <number>1000</number>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="0">
+         <widget class="QLabel" name="label_4">
+          <property name="text">
+           <string>Near</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="QLabel" name="label_5">
+          <property name="text">
+           <string>Far</string>
           </property>
          </widget>
         </item>

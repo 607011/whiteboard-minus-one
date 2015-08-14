@@ -61,7 +61,7 @@ VideoWidget::~VideoWidget()
 }
 
 
-void VideoWidget::setVideoData(INT64 nTime, const uchar *pBuffer, int nWidth, int nHeight)
+void VideoWidget::setVideoData(INT64 nTime, const QRgb *pBuffer, int nWidth, int nHeight)
 {
   Q_D(VideoWidget);
   Q_UNUSED(nTime);
@@ -69,12 +69,7 @@ void VideoWidget::setVideoData(INT64 nTime, const uchar *pBuffer, int nWidth, in
   if (nWidth != ColorWidth || nHeight != ColorHeight || pBuffer == nullptr)
     return;
 
-  quint32 *dst = reinterpret_cast<quint32*>(d->videoFrame.bits());
-  const quint32 *src = reinterpret_cast<const quint32*>(pBuffer);
-  const quint32 *srcEnd = src + (nWidth * nHeight);
-  while (src < srcEnd)
-    *dst++ = *src++;
-
+  memcpy_s(d->videoFrame.bits(), ColorSize * sizeof(QRgb), pBuffer, ColorSize * sizeof(QRgb));
   update();
 }
 

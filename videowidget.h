@@ -36,7 +36,7 @@ class VideoWidget : public QWidget
 public:
   explicit VideoWidget(QWidget *parent = nullptr);
   ~VideoWidget();
-  void setVideoData(INT64 nTime, const uchar *pBuffer, int nWidth, int nHeight);
+  void setVideoData(INT64 nTime, const QRgb *pBuffer, int nWidth, int nHeight);
 
 protected:
   void resizeEvent(QResizeEvent*);
