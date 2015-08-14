@@ -37,7 +37,8 @@ FORMS    += mainwindow.ui
 DISTFILES += \
     .gitignore \
     shaders/mix.fs.glsl \
-    shaders/mix.vs.glsl
+    shaders/mix.vs.glsl \
+    README.md
 
 RESOURCES += \
     w-1.qrc
